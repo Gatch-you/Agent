@@ -1,0 +1,1089 @@
+<title>英会話エージェント設計</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --bg:#fbfaf8;
+  --surface:#ffffff;
+  --surface-2:#f4f2ee;
+  --border:#e4e0d8;
+  --border-strong:#cfc9bd;
+  --text:#1b1915;
+  --text-mid:#4a453d;
+  --text-muted:#7b7367;
+  --local:#0d7a6c;
+  --local-bg:#e4f4f0;
+  --cloud:#a86212;
+  --cloud-bg:#fbf0dd;
+  --danger:#a33328;
+  --danger-bg:#fbe9e6;
+  --shadow:0 1px 2px rgba(25,22,18,.05), 0 6px 20px -12px rgba(25,22,18,.18);
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:"Inter","Noto Sans JP",-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI",sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16151a;
+    --surface:#1d1c22;
+    --surface-2:#26252c;
+    --border:#33313a;
+    --border-strong:#474451;
+    --text:#eeecf2;
+    --text-mid:#c3bfcc;
+    --text-muted:#948fa1;
+    --local:#4fd3bf;
+    --local-bg:#123430;
+    --cloud:#e2a75c;
+    --cloud-bg:#3a2c15;
+    --danger:#f08d81;
+    --danger-bg:#3d1f1b;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -14px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16151a;
+  --surface:#1d1c22;
+  --surface-2:#26252c;
+  --border:#33313a;
+  --border-strong:#474451;
+  --text:#eeecf2;
+  --text-mid:#c3bfcc;
+  --text-muted:#948fa1;
+  --local:#4fd3bf;
+  --local-bg:#123430;
+  --cloud:#e2a75c;
+  --cloud-bg:#3a2c15;
+  --danger:#f08d81;
+  --danger-bg:#3d1f1b;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px -14px rgba(0,0,0,.7);
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--sans);
+  font-size:15.5px;
+  line-height:1.85;
+  -webkit-font-smoothing:antialiased;
+  font-feature-settings:"palt" 1;
+}
+
+.wrap{
+  max-width:1240px;
+  margin:0 auto;
+  padding:0 28px 120px;
+  display:grid;
+  grid-template-columns:1fr;
+  gap:0 56px;
+}
+
+/* ---------- header ---------- */
+header.doc{
+  grid-column:1/-1;
+  padding:72px 0 44px;
+  border-bottom:1px solid var(--border);
+  margin-bottom:52px;
+}
+.eyebrow{
+  font-family:var(--mono);
+  font-size:11.5px;
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--text-muted);
+  margin:0 0 18px;
+}
+h1{
+  font-size:clamp(30px,4.6vw,46px);
+  line-height:1.25;
+  letter-spacing:-.02em;
+  font-weight:700;
+  margin:0 0 20px;
+}
+.lede{
+  font-size:17px;
+  color:var(--text-mid);
+  max-width:66ch;
+  margin:0 0 30px;
+}
+.meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:10px 28px;
+  font-size:13px;
+  color:var(--text-muted);
+  font-family:var(--mono);
+}
+.meta b{color:var(--text-mid);font-weight:500}
+
+/* ---------- toc ---------- */
+nav.toc{
+  grid-column:1/-1;
+  background:var(--surface-2);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:22px 26px;
+  margin-bottom:56px;
+}
+nav.toc h2{
+  font-size:11.5px;
+  font-family:var(--mono);
+  letter-spacing:.16em;
+  text-transform:uppercase;
+  color:var(--text-muted);
+  margin:0 0 14px;
+  font-weight:500;
+}
+nav.toc ol{
+  margin:0;padding:0;list-style:none;
+  columns:2;column-gap:40px;
+}
+nav.toc li{margin:0 0 7px;break-inside:avoid}
+nav.toc a{
+  color:var(--text-mid);
+  text-decoration:none;
+  font-size:14px;
+  display:flex;gap:12px;
+}
+nav.toc a:hover{color:var(--text)}
+nav.toc .n{font-family:var(--mono);font-size:12px;color:var(--text-muted);min-width:20px}
+
+main{grid-column:1/-1;min-width:0}
+
+@media (min-width:1080px){
+  .wrap{grid-template-columns:210px minmax(0,1fr)}
+  header.doc{grid-column:1/-1}
+  nav.toc{
+    grid-column:1;
+    position:sticky;top:28px;
+    align-self:start;
+    background:none;border:none;padding:0;margin:0;
+    max-height:calc(100vh - 56px);overflow-y:auto;
+  }
+  nav.toc ol{columns:1}
+  main{grid-column:2}
+}
+
+/* ---------- typography ---------- */
+section{margin:0 0 64px;scroll-margin-top:28px}
+h2{
+  font-size:24px;
+  letter-spacing:-.015em;
+  font-weight:700;
+  margin:0 0 6px;
+  padding-top:8px;
+}
+.sec-num{
+  font-family:var(--mono);
+  font-size:11.5px;
+  letter-spacing:.14em;
+  color:var(--local);
+  display:block;
+  margin-bottom:10px;
+  font-weight:600;
+}
+h3{
+  font-size:16.5px;
+  font-weight:700;
+  margin:38px 0 10px;
+  letter-spacing:-.01em;
+}
+h4{
+  font-size:14px;
+  font-weight:700;
+  margin:26px 0 8px;
+  color:var(--text-mid);
+}
+p{margin:0 0 16px;max-width:74ch}
+ul,ol{margin:0 0 18px;padding-left:1.35em;max-width:74ch}
+li{margin:0 0 8px}
+li::marker{color:var(--text-muted)}
+strong{font-weight:700}
+code{
+  font-family:var(--mono);
+  font-size:.865em;
+  background:var(--surface-2);
+  border:1px solid var(--border);
+  border-radius:4px;
+  padding:.1em .38em;
+}
+a{color:var(--local)}
+hr{border:none;border-top:1px solid var(--border);margin:44px 0}
+
+.intro{
+  color:var(--text-mid);
+  font-size:15.5px;
+  margin-bottom:26px;
+  max-width:74ch;
+}
+
+/* ---------- callouts ---------- */
+.note{
+  border-left:3px solid var(--border-strong);
+  background:var(--surface-2);
+  border-radius:0 8px 8px 0;
+  padding:16px 20px;
+  margin:24px 0;
+  font-size:14.5px;
+  color:var(--text-mid);
+}
+.note p:last-child{margin-bottom:0}
+.note.warn{border-left-color:var(--danger);background:var(--danger-bg)}
+.note.warn strong{color:var(--danger)}
+.note.key{border-left-color:var(--local);background:var(--local-bg)}
+.note.key strong{color:var(--local)}
+.note .label{
+  font-family:var(--mono);
+  font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  display:block;margin-bottom:7px;font-weight:600;
+  color:var(--text-muted);
+}
+.note.warn .label{color:var(--danger)}
+.note.key .label{color:var(--local)}
+
+/* ---------- pills ---------- */
+.pill{
+  display:inline-block;
+  font-family:var(--mono);
+  font-size:10.5px;
+  font-weight:600;
+  letter-spacing:.06em;
+  padding:2px 8px;
+  border-radius:20px;
+  vertical-align:middle;
+  white-space:nowrap;
+}
+.pill.local{background:var(--local-bg);color:var(--local)}
+.pill.cloud{background:var(--cloud-bg);color:var(--cloud)}
+.pill.none{background:var(--surface-2);color:var(--text-muted)}
+
+/* ---------- diagram ---------- */
+.diagram{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:26px 24px;
+  margin:26px 0;
+  box-shadow:var(--shadow);
+  overflow-x:auto;
+}
+.layer{
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:14px 16px;
+  background:var(--surface-2);
+  min-width:340px;
+}
+.layer + .arrow, .arrow + .layer{margin-top:0}
+.layer-title{
+  font-family:var(--mono);
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--text-muted);
+  font-weight:600;
+  margin-bottom:11px;
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
+}
+.nodes{display:flex;flex-wrap:wrap;gap:8px}
+.node{
+  font-family:var(--mono);
+  font-size:12.5px;
+  background:var(--surface);
+  border:1px solid var(--border-strong);
+  border-radius:7px;
+  padding:7px 11px;
+  line-height:1.4;
+  flex:1 1 auto;
+  min-width:150px;
+}
+.node .sub{display:block;font-size:10.5px;color:var(--text-muted);margin-top:2px;font-family:var(--sans)}
+.node.local{border-color:var(--local);background:var(--local-bg);color:var(--local)}
+.node.local .sub{color:var(--local);opacity:.8}
+.node.cloud{border-color:var(--cloud);background:var(--cloud-bg);color:var(--cloud)}
+.node.cloud .sub{color:var(--cloud);opacity:.8}
+.node.new{border-style:dashed;border-color:var(--local)}
+.arrow{
+  text-align:center;
+  font-family:var(--mono);
+  font-size:15px;
+  color:var(--text-muted);
+  margin:7px 0;
+  line-height:1;
+}
+.legend{
+  display:flex;flex-wrap:wrap;gap:8px 18px;
+  margin-top:18px;padding-top:15px;
+  border-top:1px dashed var(--border);
+  font-size:12px;color:var(--text-muted);
+  align-items:center;
+}
+
+/* ---------- state machine svg ---------- */
+.smwrap{overflow-x:auto}
+svg.sm{display:block;min-width:560px;width:100%;height:auto}
+svg.sm .box{fill:var(--surface-2);stroke:var(--border-strong);stroke-width:1.2}
+svg.sm .box.dash{stroke-dasharray:4 3;stroke:var(--local);fill:var(--local-bg)}
+svg.sm .box.err{stroke:var(--danger);fill:var(--danger-bg)}
+svg.sm text{fill:var(--text);font-family:var(--mono);font-size:12px}
+svg.sm text.lbl{fill:var(--text-muted);font-size:10.5px}
+svg.sm path,svg.sm line{stroke:var(--border-strong);stroke-width:1.2;fill:none}
+svg.sm .am{fill:var(--border-strong)}
+
+/* ---------- tables ---------- */
+.tw{overflow-x:auto;margin:22px 0;border:1px solid var(--border);border-radius:11px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:520px}
+th,td{text-align:left;padding:11px 16px;border-bottom:1px solid var(--border);vertical-align:top}
+thead th{
+  background:var(--surface-2);
+  font-size:11.5px;font-family:var(--mono);letter-spacing:.1em;text-transform:uppercase;
+  color:var(--text-muted);font-weight:600;white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:none}
+td.mono,th.mono{font-family:var(--mono);font-size:13px;white-space:nowrap}
+td.num{font-family:var(--mono);text-align:right;white-space:nowrap}
+tfoot td{background:var(--surface-2);font-weight:700;border-top:1px solid var(--border-strong)}
+
+/* ---------- code ---------- */
+pre{
+  background:var(--surface-2);
+  border:1px solid var(--border);
+  border-radius:11px;
+  padding:18px 20px;
+  overflow-x:auto;
+  margin:20px 0;
+  font-size:13px;
+  line-height:1.75;
+}
+pre code{background:none;border:none;padding:0;font-size:inherit}
+pre .c{color:var(--text-muted)}
+pre .k{color:var(--cloud)}
+pre .t{color:var(--local)}
+
+/* ---------- steps ---------- */
+ol.steps{list-style:none;padding:0;counter-reset:s;max-width:none}
+ol.steps > li{
+  counter-increment:s;
+  position:relative;
+  padding:14px 18px 14px 56px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:var(--surface);
+  margin-bottom:10px;
+}
+ol.steps > li::before{
+  content:counter(s);
+  position:absolute;left:17px;top:14px;
+  font-family:var(--mono);font-size:12px;font-weight:600;
+  width:24px;height:24px;border-radius:50%;
+  background:var(--local-bg);color:var(--local);
+  display:flex;align-items:center;justify-content:center;
+}
+ol.steps b{display:block;margin-bottom:2px}
+ol.steps .d{font-size:13.5px;color:var(--text-muted);line-height:1.7}
+
+/* ---------- decision cards ---------- */
+.adr{
+  border:1px solid var(--border);
+  border-radius:11px;
+  background:var(--surface);
+  padding:18px 20px;
+  margin-bottom:12px;
+}
+.adr h4{margin:0 0 6px;font-size:14.5px;color:var(--text)}
+.adr .verdict{
+  font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.08em;
+  padding:2px 8px;border-radius:20px;margin-left:8px;
+  background:var(--danger-bg);color:var(--danger);white-space:nowrap;
+}
+.adr .verdict.keep{background:var(--local-bg);color:var(--local)}
+.adr p{margin:0;font-size:14px;color:var(--text-mid)}
+
+footer.doc{
+  grid-column:1/-1;
+  border-top:1px solid var(--border);
+  padding-top:26px;margin-top:20px;
+  font-size:13px;color:var(--text-muted);
+}
+footer.doc a{color:var(--text-muted)}
+</style>
+
+<div class="wrap">
+
+<header class="doc">
+  <p class="eyebrow">System Architecture · v1.3</p>
+  <h1>音声英会話エージェント<br>アーキテクチャ設計</h1>
+  <p class="lede">iPhone 上で完結する、サーバーレスのハイブリッド構成。オンデバイス処理を最大限使ってランニングコストを抑えつつ、将来の音声エージェント化に向けて拡張点を1箇所に集約する。</p>
+  <div class="meta">
+    <span><b>対象端末</b> iPhone 16e / iOS 26+</span>
+    <span><b>クライアント</b> React Native (Expo Dev Build)</span>
+    <span><b>フェーズ</b> MVP・個人利用</span>
+    <span><b>優先軸</b> コスト &gt; レイテンシ</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><a href="#p1"><span class="n">01</span>設計の3原則</a></li>
+    <li><a href="#p2"><span class="n">02</span>フェーズ1 構成</a></li>
+    <li><a href="#p3"><span class="n">03</span>技術選定</a></li>
+    <li><a href="#p4"><span class="n">04</span>レイテンシとコスト</a></li>
+    <li><a href="#p5"><span class="n">05</span>コード構成</a></li>
+    <li><a href="#p6"><span class="n">06</span>主要インターフェース</a></li>
+    <li><a href="#p7"><span class="n">07</span>会話ループの状態機械</a></li>
+    <li><a href="#p8"><span class="n">08</span>コンテキスト管理</a></li>
+    <li><a href="#p9"><span class="n">09</span>フェーズ1.5 TTS ローカル化</a></li>
+    <li><a href="#p10"><span class="n">10</span>フェーズ2 エージェント化</a></li>
+    <li><a href="#p11"><span class="n">11</span>いま打つ布石</a></li>
+    <li><a href="#p12"><span class="n">12</span>実装順序</a></li>
+    <li><a href="#p13"><span class="n">13</span>不採用とした選択肢</a></li>
+    <li><a href="#p14"><span class="n">14</span>未決事項</a></li>
+  </ol>
+</nav>
+
+<main>
+
+<!-- ============ 01 ============ -->
+<section id="p1">
+  <span class="sec-num">01</span>
+  <h2>設計の3原則</h2>
+  <p class="intro">個別の技術選定はすべてこの3つから導かれている。判断に迷ったときはここに戻る。</p>
+
+  <h3>1. ホットパスとコールドパスを分ける</h3>
+  <p>会話中（ホットパス）はレイテンシ最優先で、余計な処理を一切挟まない。発音・文法フィードバックのような分析処理は、会話終了後（コールドパス）に非同期でまとめて実行する。ユーザーは会話が終わってから結果を見るため、体験を落とさずにコストと遅延を切り離せる。</p>
+
+  <h3>2. 課金が発生しない処理はすべてローカルへ寄せる</h3>
+  <p>iPhone 16e は Apple Intelligence 対応端末であり、<code>SpeechAnalyzer</code>（音声認識）と <code>FoundationModels</code>（約3B のオンデバイス LLM）が無料で使える。品質が体験に直結する箇所（会話生成・音声合成）だけをクラウドに残し、それ以外はローカルに置く。</p>
+
+  <h3>3. 差し替え点を1箇所に集約する</h3>
+  <p>「カスケード構成」と「Speech-to-Speech 構成」は、外から見れば同じ責務を果たす。両者を <code>ConversationSessionPort</code> という単一のインターフェースの裏に隠し、アプリ層が実装を知らない状態を保つ。フェーズ2 のエージェント化もこの境界の上に載る。</p>
+</section>
+
+<!-- ============ 02 ============ -->
+<section id="p2">
+  <span class="sec-num">02</span>
+  <h2>フェーズ1 構成：サーバーレス・ハイブリッド</h2>
+  <p class="intro">バックエンドは存在しない。ローカル STT がある以上、音声をサーバーに通す理由がなく、APIキーは端末の Secure Storage に置く。</p>
+
+  <div class="diagram">
+    <div class="layer">
+      <div class="layer-title"><span>App Layer — React Native / Expo</span></div>
+      <div class="nodes">
+        <div class="node">Conversation UI<span class="sub">会話画面・録音制御</span></div>
+        <div class="node">Review UI<span class="sub">履歴・フィードバック表示</span></div>
+      </div>
+    </div>
+    <div class="arrow">↕</div>
+    <div class="layer">
+      <div class="layer-title"><span>Domain — 純粋 TypeScript / 副作用なし</span></div>
+      <div class="nodes">
+        <div class="node">sessionMachine<span class="sub">会話ループの状態遷移</span></div>
+        <div class="node">contextPolicy<span class="sub">履歴の圧縮ルール</span></div>
+        <div class="node">conversation<span class="sub">Session / Turn / Message</span></div>
+      </div>
+    </div>
+    <div class="arrow">↕</div>
+    <div class="layer">
+      <div class="layer-title"><span>Ports — interface のみ</span><span class="pill none">差し替え境界</span></div>
+      <div class="nodes">
+        <div class="node">ConversationSessionPort</div>
+        <div class="node">SummarizerPort</div>
+        <div class="node">ConversationRepository</div>
+      </div>
+    </div>
+    <div class="arrow">↕</div>
+    <div class="layer">
+      <div class="layer-title"><span>Adapters</span></div>
+      <div class="nodes">
+        <div class="node local">SpeechAnalyzer STT<span class="sub">Swift ブリッジ / 無料</span></div>
+        <div class="node local">FoundationModels<span class="sub">要約・添削 / 無料</span></div>
+        <div class="node local">expo-sqlite<span class="sub">会話履歴</span></div>
+        <div class="node cloud">Text LLM<span class="sub">応答生成 / 従量</span></div>
+        <div class="node cloud">TTS<span class="sub">音声合成 / 従量</span></div>
+      </div>
+    </div>
+    <div class="legend">
+      <span class="pill local">オンデバイス・無料</span>
+      <span class="pill cloud">クラウド・従量課金</span>
+      <span style="margin-left:auto">バックエンドサーバー：<b style="color:var(--text-mid)">なし</b></span>
+    </div>
+  </div>
+
+  <div class="note key">
+    <span class="label">Key decision</span>
+    <p>課金対象が <strong>テキスト LLM と TTS の2つだけ</strong>になっている点が、この構成の核心。STT・要約・履歴保存・文法添削はすべて無料でオフライン動作する。</p>
+  </div>
+</section>
+
+<!-- ============ 03 ============ -->
+<section id="p3">
+  <span class="sec-num">03</span>
+  <h2>技術選定</h2>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>領域</th><th>採用</th><th>配置</th><th>理由</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="mono">STT</td>
+        <td class="mono">SpeechAnalyzer<br>SpeechTranscriber</td>
+        <td><span class="pill local">LOCAL</span></td>
+        <td>iOS 26+。英語精度はトップクラスで Whisper Small の約3倍速。完全オンデバイス・無料。クラウド STT を使う理由がない</td>
+      </tr>
+      <tr>
+        <td class="mono">応答生成</td>
+        <td class="mono">gpt-4.1-mini 級<br>/ gemini-flash 級</td>
+        <td><span class="pill cloud">CLOUD</span></td>
+        <td>会話の自然さとレベル調整の精度が体験に直結する。ここは妥協しない</td>
+      </tr>
+      <tr>
+        <td class="mono">TTS</td>
+        <td class="mono">クラウド TTS<br>（ストリーミング）</td>
+        <td><span class="pill cloud">CLOUD</span></td>
+        <td>AI の発話がそのまま発音の手本になる。<code>AVSpeechSynthesizer</code> は無料だが機械的で、学習用途では不適。<strong>フェーズ1.5 で Kokoro-82M へローカル化（試聴合格・採用確定）</strong>（<a href="#p9">§09</a>）</td>
+      </tr>
+      <tr>
+        <td class="mono">要約・添削</td>
+        <td class="mono">FoundationModels</td>
+        <td><span class="pill local">LOCAL</span></td>
+        <td>非同期・定型処理なので約3B で十分。コンテキスト圧縮が無料になる効果が大きい。オフラインでも動く</td>
+      </tr>
+      <tr>
+        <td class="mono">永続化</td>
+        <td class="mono">expo-sqlite</td>
+        <td><span class="pill local">LOCAL</span></td>
+        <td>個人利用のため同期不要。BaaS を挟む必要がない</td>
+      </tr>
+      <tr>
+        <td class="mono">APIキー</td>
+        <td class="mono">expo-secure-store</td>
+        <td><span class="pill local">LOCAL</span></td>
+        <td>初回起動時に手入力し Keychain へ格納。バンドルにも Git にも載らない</td>
+      </tr>
+      <tr>
+        <td class="mono">ビルド</td>
+        <td class="mono">Expo Dev Build</td>
+        <td>—</td>
+        <td>Swift ネイティブモジュールを使うため Expo Go では動作しない</td>
+      </tr>
+      <tr>
+        <td class="mono">発音採点</td>
+        <td class="mono">—</td>
+        <td><span class="pill none">SCOPE OUT</span></td>
+        <td>今回は対象外。将来必要になれば Azure Pronunciation Assessment を検討（LLM では音素レベルの採点は不可）</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note warn">
+    <span class="label">APIキーの扱い</span>
+    <p><code>.env</code> と <code>EXPO_PUBLIC_*</code> は<strong>使わない</strong>。React Native はビルド時に値を JS バンドルへ埋め込むため、ハードコードと実質同じになる。加えて個人開発でのキー流出は、アプリ解析よりも<strong>リポジトリを public にした瞬間</strong>に起きるケースが圧倒的に多い。</p>
+    <p style="margin-top:10px">併せて、プロバイダ側で<strong>月額上限を設定</strong>し、このアプリ専用のキーを発行しておくこと（revoke が他に影響しない）。</p>
+  </div>
+</section>
+
+<!-- ============ 04 ============ -->
+<section id="p4">
+  <span class="sec-num">04</span>
+  <h2>レイテンシとコスト</h2>
+
+  <h3>応答レイテンシの内訳</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>区間</th><th>処理</th><th class="num" style="text-align:right">目安</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">1</td><td>発話終了検知 → 確定テキスト <span class="pill local">LOCAL</span></td><td class="num">0.1 – 0.2 s</td></tr>
+      <tr><td class="mono">2</td><td>LLM 1文目の生成完了 <span class="pill cloud">CLOUD</span></td><td class="num">0.4 – 0.7 s</td></tr>
+      <tr><td class="mono">3</td><td>TTS 最初の音声が鳴るまで <span class="pill cloud">CLOUD</span></td><td class="num">0.3 – 0.5 s</td></tr>
+    </tbody>
+    <tfoot><tr><td></td><td>体感レイテンシ</td><td class="num">約 1.0 – 1.5 s</td></tr></tfoot>
+  </table>
+  </div>
+  <p>Speech-to-Speech 構成の約 0.5 秒には及ばないが、<strong>英会話学習という用途ではむしろ許容範囲</strong>。ネイティブ同士の会話より一拍空く程度で、学習者が聞き取って考える間として自然に働く。</p>
+  <p>なお <a href="#p9">フェーズ1.5</a> で TTS をオンデバイス化すると区間3のネットワーク往復が消え、<strong>合計 0.7 – 1.0 秒</strong>まで縮む見込み。カスケード構成のコストのまま Speech-to-Speech に迫る数字になる。</p>
+
+  <div class="note">
+    <span class="label">実装上の必須テクニック</span>
+    <p>LLM の出力を<strong>文単位で切って逐次 TTS に流す</strong>こと。全文の生成を待たずに1文目から再生を始めれば、体感レイテンシはおよそ半分になる。これをやらないと 3 秒級まで悪化する。</p>
+  </div>
+
+  <h3>ランニングコスト（月20時間利用の想定）</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>項目</th><th>構成</th><th class="num" style="text-align:right">月額目安</th></tr></thead>
+    <tbody>
+      <tr><td>STT</td><td>オンデバイス <span class="pill local">LOCAL</span></td><td class="num">$0</td></tr>
+      <tr><td>応答生成</td><td>mini クラス・テキストのみ</td><td class="num">数ドル未満</td></tr>
+      <tr><td>TTS</td><td>支配的コスト・約 $0.3/時</td><td class="num">$6 前後</td></tr>
+      <tr><td>要約・添削</td><td>オンデバイス <span class="pill local">LOCAL</span></td><td class="num">$0</td></tr>
+      <tr><td>サーバー</td><td>なし</td><td class="num">$0</td></tr>
+    </tbody>
+    <tfoot><tr><td colspan="2">合計</td><td class="num">$5 – 10</td></tr></tfoot>
+  </table>
+  </div>
+  <p>比較対象として、Realtime API 直結（mini）の場合は同条件で <strong>$25 – 60</strong> 程度。ローカル STT と逐次 TTS の採用で、およそ 1/4 に収まっている。</p>
+  <p><a href="#p9">フェーズ1.5</a> の TTS ローカル化（採用確定）が完了すると支配的コストが消え、<strong>課金対象はテキスト LLM のみ・月数ドル未満</strong>になる。実質的にランニングコストの問題は解消する見込み。</p>
+</section>
+
+<!-- ============ 05 ============ -->
+<section id="p5">
+  <span class="sec-num">05</span>
+  <h2>コード構成</h2>
+  <p class="intro">DDD の戦術パターンは採用せず、<strong>依存を内向きにするという原則だけ</strong>を借用する（ポート&amp;アダプタ）。このアプリの複雑さは業務ルールではなく I/O のオーケストレーションと状態遷移にあるため。</p>
+
+<pre><code>src/
+  domain/                          <span class="c"># 純粋TS・副作用ゼロ・実機なしでテスト可能</span>
+    conversation.ts                <span class="c"># Session / Turn / Message</span>
+    contextPolicy.ts               <span class="c"># 直近N往復 + 要約 の組み立て</span>
+    sessionMachine.ts              <span class="c"># 会話ループの状態機械</span>
+
+  ports/                           <span class="c"># interface のみ</span>
+    ConversationSessionPort.ts     <span class="c"># ★唯一の差し替え点</span>
+    SttPort.ts  LlmPort.ts  TtsPort.ts
+    SummarizerPort.ts
+    ConversationRepository.ts
+
+  adapters/
+    session/
+      CascadeSession.ts            <span class="c"># Stt+Llm+Tts を合成（フェーズ1採用）</span>
+      RealtimeSession.ts           <span class="c"># Speech-to-Speech 直結（将来の差し替え先）</span>
+    stt/SpeechAnalyzerStt.ts       <span class="c"># ← Swift ブリッジ</span>
+    summarizer/FoundationModelsSummarizer.ts  <span class="c"># ← Swift ブリッジ</span>
+    llm/OpenAiLlm.ts
+    tts/StreamingTts.ts
+    repo/SqliteConversationRepository.ts
+
+  app/                             <span class="c"># hooks / 画面</span>
+</code></pre>
+
+  <p><code>domain/</code> が Node 上だけで完結してテストできることが重要。<strong>コンテキスト圧縮ロジックを実機なしで検証できる</strong>効果は、地味だが開発速度に大きく効く。</p>
+
+  <h4>意図的に採用しないもの</h4>
+  <ul>
+    <li>集約ルート・不変条件の強制 — 守るべき不変条件がほぼ存在しない</li>
+    <li>Domain Event / イベントソーシング — 過剰</li>
+    <li>層ごとの DTO とマッパー — 1人開発では変換コードが増えるだけ</li>
+    <li>ユビキタス言語のドキュメント化 — 共有する相手がいない</li>
+    <li>Repository の過剰抽象化 — SQLite 1つなので薄い interface で足りる</li>
+  </ul>
+</section>
+
+<!-- ============ 06 ============ -->
+<section id="p6">
+  <span class="sec-num">06</span>
+  <h2>主要インターフェース</h2>
+
+  <h3>ConversationSessionPort</h3>
+  <p>Speech-to-Speech は STT・LLM・TTS が1つに融合しているため、<strong>3ポートに分割した設計では Realtime API へ差し替えられない</strong>。そこで上位に1枚かぶせ、実装側で合成するか直結するかを選べるようにする。</p>
+
+<pre><code><span class="k">interface</span> <span class="t">ConversationSessionPort</span> {
+  start(config: SessionConfig): Promise&lt;void&gt;
+  sendAudio(chunk: Int16Array): void
+  interrupt(): void                        <span class="c">// barge-in</span>
+  onTranscript: (t: Transcript) =&gt; void    <span class="c">// 学習ログ用に必ず取る</span>
+  onAudioChunk: (a: AudioChunk) =&gt; void
+  close(): Promise&lt;void&gt;
+}</code></pre>
+
+  <p>実装は2通り。上位から見れば同一なので、切り替えてもアプリ層は一行も変わらない。</p>
+  <ul>
+    <li><code>CascadeSession</code> — 内部で <code>SttPort</code> / <code>LlmPort</code> / <code>TtsPort</code> を合成 <span class="pill local">フェーズ1採用</span></li>
+    <li><code>RealtimeSession</code> — Speech-to-Speech API に直結 <span class="pill none">将来の差し替え先</span></li>
+  </ul>
+
+  <h3>LlmPort — tools を最初から生やす</h3>
+  <p>フェーズ1 では常に空配列を渡すが、<strong>引数だけは最初から定義しておく</strong>。ストリーミング実装に後からツール呼び出しを差し込むのは想像以上に面倒で、フェーズ2 の着手コストを大きく左右する。</p>
+
+<pre><code><span class="k">interface</span> <span class="t">LlmPort</span> {
+  stream(req: {
+    messages: Message[]
+    tools: ToolSchema[]      <span class="c">// フェーズ1では常に [] を渡す</span>
+    signal: AbortSignal
+  }): AsyncIterable&lt;LlmDelta&gt;
+}</code></pre>
+</section>
+
+<!-- ============ 07 ============ -->
+<section id="p7">
+  <span class="sec-num">07</span>
+  <h2>会話ループの状態機械</h2>
+  <p class="intro">バグの大半はここに集中する。割り込み、ネットワーク断、TTS 再生中の新規発話、バックグラウンド遷移。これらを boolean フラグの組み合わせで捌くと確実に破綻するため、<strong>XState か手書き reducer で明示的にモデリングする</strong>。</p>
+
+  <div class="diagram smwrap">
+    <svg class="sm" viewBox="0 0 720 250" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="会話ループの状態遷移図">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path class="am" d="M0,0 L10,5 L0,10 z" stroke="none"/>
+        </marker>
+      </defs>
+
+      <!-- idle -->
+      <rect class="box" x="14" y="46" width="104" height="40" rx="9"/>
+      <text x="66" y="71" text-anchor="middle">idle</text>
+
+      <!-- listening -->
+      <rect class="box" x="168" y="46" width="118" height="40" rx="9"/>
+      <text x="227" y="71" text-anchor="middle">listening</text>
+
+      <!-- thinking -->
+      <rect class="box" x="336" y="46" width="118" height="40" rx="9"/>
+      <text x="395" y="71" text-anchor="middle">thinking</text>
+
+      <!-- speaking -->
+      <rect class="box" x="504" y="46" width="118" height="40" rx="9"/>
+      <text x="563" y="71" text-anchor="middle">speaking</text>
+
+      <!-- acting (phase 2) -->
+      <rect class="box dash" x="336" y="166" width="118" height="40" rx="9"/>
+      <text x="395" y="191" text-anchor="middle" style="fill:var(--local)">acting</text>
+      <text x="395" y="224" text-anchor="middle" class="lbl">phase 2 / tool 実行</text>
+
+      <!-- error -->
+      <rect class="box err" x="576" y="166" width="118" height="40" rx="9"/>
+      <text x="635" y="191" text-anchor="middle" style="fill:var(--danger)">recovering</text>
+
+      <!-- arrows -->
+      <line x1="120" y1="66" x2="162" y2="66" marker-end="url(#ah)"/>
+      <text x="141" y="38" text-anchor="middle" class="lbl">start</text>
+
+      <line x1="288" y1="66" x2="330" y2="66" marker-end="url(#ah)"/>
+      <text x="309" y="38" text-anchor="middle" class="lbl">確定</text>
+
+      <line x1="456" y1="66" x2="498" y2="66" marker-end="url(#ah)"/>
+      <text x="477" y="38" text-anchor="middle" class="lbl">1文目</text>
+
+      <!-- speaking -> listening (loop back, over the top) -->
+      <path d="M563,44 C563,6 227,6 227,44" marker-end="url(#ah)"/>
+      <text x="395" y="16" text-anchor="middle" class="lbl">再生完了 / barge-in で即時中断</text>
+
+      <!-- thinking -> acting -->
+      <path d="M395,88 L395,160" marker-end="url(#ah)" stroke-dasharray="4 3"/>
+      <text x="408" y="128" class="lbl">tool_call</text>
+
+      <!-- acting -> thinking -->
+      <path d="M336,186 C300,186 300,66 330,66" marker-end="url(#ah)" stroke-dasharray="4 3"/>
+
+      <!-- speaking/thinking -> recovering -->
+      <path d="M600,88 L628,160" marker-end="url(#ah)"/>
+      <text x="646" y="128" class="lbl">error</text>
+
+      <!-- recovering -> listening -->
+      <path d="M576,196 C420,238 227,238 227,90" marker-end="url(#ah)"/>
+      <text x="400" y="252" text-anchor="middle" class="lbl"></text>
+    </svg>
+    <div class="legend">
+      <span style="display:inline-flex;align-items:center;gap:7px"><span style="width:22px;height:0;border-top:1.5px dashed var(--local);display:inline-block"></span>フェーズ2 で追加される遷移</span>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="label">最初に潰すべき技術リスク</span>
+    <p><strong>エコーキャンセル</strong>。TTS 再生中もマイクを開けておかないと barge-in が実装できないが、素朴に作るとスピーカーの音を自分で拾って STT が誤作動する。</p>
+    <p style="margin-top:10px"><code>AVAudioSession</code> を <code>.playAndRecord</code> + <code>.voiceChat</code> モードに設定すると OS の AEC が有効になる。<strong>ここを通さないまま先に進むと、後で全面的な作り直しになる</strong>。プロトタイプの一発目でこの音声ループだけを単独検証すること。</p>
+  </div>
+</section>
+
+<!-- ============ 08 ============ -->
+<section id="p8">
+  <span class="sec-num">08</span>
+  <h2>コンテキスト管理</h2>
+  <p class="intro">長い会話でコストが膨らむ最大の原因は、毎ターン全履歴を再送すること。DB には生ログを全件残しつつ、<strong>LLM に渡すのは以下の3層だけ</strong>に絞る。</p>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>層</th><th>内容</th><th>生成</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">1. 直近ターン</td><td>直近 8〜10 往復を生のまま</td><td><span class="pill none">—</span></td></tr>
+      <tr><td class="mono">2. セッション要約</td><td>一定ターンごとに圧縮し、古い生ログをコンテキストから外す</td><td><span class="pill local">FoundationModels</span></td></tr>
+      <tr><td class="mono">3. ユーザープロフィール</td><td>レベル、苦手な文法、頻出の誤り。システムプロンプトへ注入</td><td><span class="pill local">FoundationModels</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>2 と 3 の生成をローカルモデルに任せられるため、<strong>圧縮処理そのものは無料</strong>になる。運用面では 1 セッションを 15 分程度で区切るのも有効。</p>
+</section>
+
+<!-- ============ 09 ============ -->
+<section id="p9">
+  <span class="sec-num">09</span>
+  <h2>フェーズ1.5：TTS のオンデバイス化</h2>
+  <p class="intro">クラウド TTS を OSS の軽量モデルに差し替える検証フェーズ。<strong>目的はコスト削減ではなくレイテンシとオフライン動作</strong>。<code>TtsPort</code> の裏を入れ替えるだけで、アプリ層も <code>CascadeSession</code> も変更しない。</p>
+
+  <div class="note key">
+    <span class="label">Status — 2026-09-15</span>
+    <p><strong>試聴テスト（検証ステップ1）合格。Kokoro-82M の採用を方針として確定。</strong> 全10項目のチェックリストを通過し、発音の手本として許容できると判断した。G2P の懸念も MisakiSwift により解消済み。</p>
+    <p style="margin-top:10px">残るは<strong>実機での性能実測（ステップ3）とライブラリ選定</strong>のみ。ここで RTF・メモリ・ウォームアップ時間が想定内であれば、そのまま <code>TtsPort</code> アダプタの実装に進む。</p>
+  </div>
+
+  <div class="tw">
+  <table>
+    <thead><tr><th>観点</th><th>変化</th><th>評価</th></tr></thead>
+    <tbody>
+      <tr><td>体感レイテンシ</td><td class="mono">1.0–1.5 s → 0.7–1.0 s</td><td><strong>本命</strong>。ネットワーク往復 0.3–0.5 秒が丸ごと消える</td></tr>
+      <tr><td>オフライン動作</td><td class="mono">不可 → 完全対応</td><td>会話全体がオフラインで成立する</td></tr>
+      <tr><td>ランニングコスト</td><td class="mono">$6/月 → $0</td><td>これ<em>だけ</em>が理由なら見送るべき水準</td></tr>
+      <tr><td>アプリサイズ</td><td class="mono">+80 – 170 MB</td><td>Core ML + INT8 量子化なら ~80 MB。許容範囲</td></tr>
+      <tr><td>音声品質</td><td class="mono">要 A/B 試聴</td><td>クラウド最上位には未達。特に抑揚と間</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>候補：Kokoro-82M</h3>
+  <p>Apache 2.0、82M パラメータ。この規模で TTS Arena 上位の品質に達しており、Core ML / MLX への移植版が複数公開されている（<code>kokoro-ios</code> / <code>kokoro-coreml</code> / <code>mlx-audio</code>）。gapless streaming に対応しているため、文単位の逐次再生にもそのまま乗る。</p>
+  <p>性能は <strong>iPhone 16 Pro で RTF 0.08</strong>（1秒の音声を 0.08 秒で生成）という報告があり、A18 搭載の 16e でも実用域に入る見込み。</p>
+
+  <div class="note warn">
+    <span class="label">ベンチマークの食い違いに注意</span>
+    <p>別の比較では Kokoro は「FTTS 3,658 ms / ピークメモリ 2.0 GB / デスクトップ・サーバー向き」と評価されている。これはおそらく <strong>PyTorch 実装のデスクトップ計測</strong>であり、Core ML 版の iPhone 実測とは別物。<strong>採否は自分の実機での実測で判断すること</strong>、公開ベンチを鵜呑みにしない。</p>
+  </div>
+
+  <h3>G2P 依存：調査済み・解決済み</h3>
+  <div class="note key">
+    <span class="label">Resolved — 2026-09 調査</span>
+    <p>当初この設計の最大リスクと見ていた <code>espeak-ng</code>（C ライブラリ・GPLv3）の iOS ビルドは<strong>不要</strong>だった。Kokoro 公式 G2P である <code>misaki</code> の Swift 完全移植 <strong><code>MisakiSwift</code>（Apache-2.0）</strong> が公開されており、辞書 + 接尾辞処理 + BART ニューラルフォールバックの3層構成をネイティブで提供している。<code>kokoro-ios</code> は <code>Package.swift</code> で espeak-ng 依存を明示的にコメントアウトし、MisakiSwift を既定の G2P としている。</p>
+    <p style="margin-top:10px"><strong>結果として GPLv3 の伝播も起きない</strong>ため、配布形態の制約を考慮する必要がなくなった。</p>
+  </div>
+
+  <h3>ライブラリ候補</h3>
+  <div class="tw">
+  <table>
+    <thead><tr><th>候補</th><th>G2P / 実行基盤</th><th>ライセンス</th><th>サイズ</th><th>評価</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="mono">soniqo/<br>speech-swift<br><span class="pill local">第1候補</span></td>
+        <td>Swift + Core ML 内蔵フォニマイザ<br>ANE 実行</td>
+        <td class="mono">Apache-2.0<br>GPL 依存なし</td>
+        <td class="mono">~170 MB<br>INT8 で ~80 MB</td>
+        <td>量子化あり、iOS サンプルアプリ同梱、HF から重み自動取得、直近1ヶ月以内に更新。<strong>Core ML 実行なのでシミュレータでも動く</strong></td>
+      </tr>
+      <tr>
+        <td class="mono">mlalma/<br>kokoro-ios<br><span class="pill none">第2候補</span></td>
+        <td>MisakiSwift<br>MLX 実行</td>
+        <td class="mono">MIT<br>+ Apache-2.0</td>
+        <td class="mono">~330–600 MB<br>量子化なし</td>
+        <td>Kokoro 専用の最小 SPM パッケージで構成は最もクリーン。ただし<strong>MLX 依存のため iOS シミュレータ非対応</strong>、量子化なし、更新が8ヶ月前。トークン単位タイムスタンプが要るならこちら</td>
+      </tr>
+      <tr>
+        <td class="mono">mattmireles/<br>kokoro-coreml</td>
+        <td>G2P なし<br>（音素 ID を外部から渡す）</td>
+        <td class="mono">Apache-2.0</td>
+        <td class="mono">未確認</td>
+        <td>G2P を別途用意する必要があり、今回の目的には合致しない。ベンチマーク研究用としては有用</td>
+      </tr>
+      <tr>
+        <td class="mono">Blaizzy/<br>mlx-audio</td>
+        <td>Python <code>misaki</code></td>
+        <td class="mono">MIT</td>
+        <td class="mono">—</td>
+        <td>Python 専用。Swift 版に Kokoro が存在しないため対象外</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>残る留意点</h3>
+  <ul>
+    <li><strong>ストリーミング API はない</strong> — Kokoro は非自己回帰モデルで一括合成。ただし現行設計はもともと<strong>文単位で TTS に流す</strong>方式なので、チャンク運用でそのまま噛み合う。設計変更は不要</li>
+    <li><strong>ウォームアップ</strong> — 初回推論が遅い。セッション開始時にプリロードする</li>
+    <li><strong>トークン長上限</strong> — <code>kokoro-ios</code> は 510 トークン。文分割はアプリ側の責務（既存設計と整合）</li>
+    <li>発熱・バッテリーは RTF 0.08 なら実質問題にならない</li>
+  </ul>
+
+  <h3>ファインチューニングは当面不要</h3>
+  <p>TTS の学習が必要になるのは「特定の話者の声を再現したい」ときに限られる。本件の要件は<strong>「英語として自然な発音の手本」であって声の同一性ではない</strong>ため、事前学習済みモデルをそのまま使う。</p>
+  <p>学習にはクリーンなスタジオ品質の音声が数時間分必要で、データ整備と試行錯誤で数週間かかるうえ、<strong>元の事前学習モデルより品質が下がるリスクのほうが高い</strong>。実施するとしても、声の同一性という要件が明確に立ってから（実行環境は Google Colab を想定）。</p>
+
+  <h3>検証手順</h3>
+  <ol class="steps">
+    <li><b><s style="opacity:.5">試聴による採否判定</s> — 合格（2026-09-15）</b><span class="d">Colab ノートブックでボイス選定 → プロソディ耐久テスト（疑問文の上昇調・縮約形・対比強勢・最小対立ペア等）→ 速度変更 → 会話ターン再現 → A/B の10項目を実施し、全項目を通過。<strong>発音の手本として許容できると判断。</strong></span></li>
+    <li><b><s style="opacity:.5">G2P 依存の解決方法を確認</s> — 完了</b><span class="d">MisakiSwift（Apache-2.0）により解決済み。espeak-ng は不要で、GPLv3 の制約も発生しない。上記参照。</span></li>
+    <li><b>iPhone 16e 実機で RTF・メモリ・ウォームアップを実測</b><span class="d">公開ベンチに食い違いがあるため必須（Colab の計測値は x86 CPU のもので実機性能を示さない）。ウォームアップ後の定常値と初回レイテンシの両方を計測する。</span></li>
+    <li><b><code>TtsPort</code> アダプタとして実装</b><span class="d">採用が決まってから着手。第1候補は <code>soniqo/speech-swift</code> の <code>KokoroTTS</code>。差し替えのみで完結するはずで、他の層に波及したら設計ミスを疑う。</span></li>
+  </ol>
+
+  <div class="note">
+    <span class="label">判定基準（試聴チェックリストの要点）</span>
+    <p>一般的な TTS 評価とは基準が異なる。<strong>「聞き取りやすいか」ではなく「真似してよい発音か」</strong>で判断する。自然さがやや劣るのは許容できるが、次の4点は許容できない — 母音・子音の音価のずれ、単語の強勢位置の誤り、疑問文が上昇調にならない、意味の切れ目と無関係な区切り。</p>
+  </div>
+
+  <div class="note key">
+    <span class="label">実施タイミング</span>
+    <p><strong>フェーズ1 では着手しない。</strong> 実装順序のステップ1（音声ループ単体の検証）が通ってから取りかかる。ポート設計を入れておいたおかげで、後回しにしても手戻りが発生しない構造になっている。</p>
+  </div>
+</section>
+
+<!-- ============ 10 ============ -->
+<section id="p10">
+  <span class="sec-num">10</span>
+  <h2>フェーズ2：音声エージェント化</h2>
+  <p class="intro">音声をインターフェースに IoT 操作やエージェントタスクを行う段階。<strong>音声入出力レイヤーは一切変更しない</strong>。追加されるのは Orchestrator と Tool レイヤーの2枚のみ。</p>
+
+  <div class="diagram">
+    <div class="layer">
+      <div class="layer-title"><span>Audio Layer</span><span class="pill none">変更なし</span></div>
+      <div class="nodes"><div class="node">ConversationSessionPort</div></div>
+    </div>
+    <div class="arrow">↕</div>
+    <div class="layer">
+      <div class="layer-title"><span>Dialog Orchestrator</span><span class="pill local">新設・拡張点</span></div>
+      <div class="nodes">
+        <div class="node new">ConversationPolicy<span class="sub">英会話モード / tools = []</span></div>
+        <div class="node new">AgentPolicy<span class="sub">操作モード / plan → act → observe</span></div>
+      </div>
+    </div>
+    <div class="arrow">↕</div>
+    <div class="layer">
+      <div class="layer-title"><span>Tool Registry → ToolPort</span><span class="pill local">新設</span></div>
+      <div class="nodes">
+        <div class="node new">HomeKit / Matter<span class="sub">Swift ブリッジ</span></div>
+        <div class="node new">App Intents / Shortcuts<span class="sub">Siri・他アプリ連携</span></div>
+        <div class="node new">MCP Client<span class="sub">任意の外部ツール</span></div>
+      </div>
+    </div>
+  </div>
+
+  <h3>ツール層は MCP で話させる</h3>
+  <p>ツールを増やすたびにアプリを再ビルドする運用は続かない。<strong>ツール側を MCP サーバーとして外に出し、アプリを MCP クライアントにする</strong>ことで、ツール追加とアプリ改修を切り離す。この段階で初めてバックエンド（自宅の小型サーバー等）が必要になるが、用途が明確なので健全な追加といえる。英会話のためのサーバーは最後まで不要のまま。</p>
+
+  <h3>ローカルモデルによるインテント振り分け</h3>
+  <p><code>FoundationModels</code> はツール呼び出しに対応しているため、フェーズ1 で入れた仕組みがそのまま活きる。</p>
+  <ul>
+    <li>「会話か、デバイス操作か」の判定 → <strong>ローカル・無料・即時</strong></li>
+    <li>「電気を消して」レベルの単純命令 → <strong>ローカルで完結。クラウド不要、オフラインでも動作</strong></li>
+    <li>複雑な多段タスクのみ → クラウドのエージェントへエスカレーション</li>
+  </ul>
+  <p>照明の ON/OFF のためにクラウドへ往復して課金するのは不合理なので、この振り分けは実用上かなり効く。</p>
+
+  <h3>会話モードと操作モードは必ず分離する</h3>
+  <div class="note warn">
+    <span class="label">安全性と学習体験の両面から必須</span>
+    <p>英会話の練習中に "Could you turn off the light?" と発話したら実際に消灯した、という事態を防ぐ。<strong>英会話モードでは tools に空配列を渡し、物理的に呼べない状態にする</strong>。モード切替はウェイクワードか明示的な UI で行い、暗黙の自動判定に頼らないこと。</p>
+  </div>
+
+  <h4>副作用を持つ操作で追加される考慮点</h4>
+  <ul>
+    <li><strong>確認フロー</strong> — 不可逆な操作（施錠解除・送信・購入）は音声での明示確認を挟む</li>
+    <li><strong>冪等性</strong> — 音声認識の揺れで同一命令が二重に飛ぶ。リクエストに ID を振って重複実行を防ぐ</li>
+    <li><strong>プロンプトインジェクション</strong> — エージェントがメールや Web を読むようになったら、<strong>その内容は命令ではなくデータとして扱う</strong>。読み込んだ内容に含まれる指示でツールを実行させない。後付けが難しいため、Orchestrator の設計時点で構造に組み込むこと</li>
+  </ul>
+</section>
+
+<!-- ============ 11 ============ -->
+<section id="p11">
+  <span class="sec-num">11</span>
+  <h2>いま打っておく布石</h2>
+  <p class="intro">フェーズ2 のためにいま作るべきものは<strong>何もない</strong>（YAGNI）。ただし後から入れると高くつくものが3つだけある。これらは今のうちに済ませておく。</p>
+
+  <ol class="steps">
+    <li>
+      <b><code>domain/</code> を英会話に固有の名前にしない</b>
+      <span class="d"><code>LessonTurn</code> ではなく <code>Turn</code>、<code>Lesson</code> ではなく <code>Session</code>。エージェント化の際、ドメイン層全体のリネームは非常に高くつく。</span>
+    </li>
+    <li>
+      <b><code>LlmPort</code> に <code>tools</code> 引数を最初から生やす</b>
+      <span class="d">当面は空配列を渡すだけでよい。ストリーミング実装に後からツール呼び出しを差し込む作業は、想像以上に広範囲へ波及する。</span>
+    </li>
+    <li>
+      <b>SQLite スキーマに <code>tool_calls</code> を nullable で先に入れる</b>
+      <span class="d">マイグレーションは後回しにするほど痛みが増す。カラム1本の先行投資で済む。</span>
+    </li>
+  </ol>
+
+  <p>逆に、<strong>Tool Registry も MCP クライアントも Orchestrator の分岐も、いまは作らない</strong>。上記3点だけで拡張の扉は開いたままになる。</p>
+</section>
+
+<!-- ============ 12 ============ -->
+<section id="p12">
+  <span class="sec-num">12</span>
+  <h2>実装順序</h2>
+  <p class="intro">技術リスクの高い順に並べてある。特に 1 は、失敗した場合に構成全体の見直しが必要になるため最優先で検証する。</p>
+
+  <ol class="steps">
+    <li><b>音声ループ単体の検証</b><span class="d"><code>AVAudioSession</code> の AEC 設定、録音 → 再生 → barge-in。UI もクラウドも繋がない状態で、この往復だけを成立させる。<strong>ここが最大の技術リスク。</strong></span></li>
+    <li><b>SpeechAnalyzer ブリッジ</b><span class="d">Swift ネイティブモジュール経由でストリーミング STT を JS 側に流す。Expo Dev Build が必要。</span></li>
+    <li><b>CascadeSession の実装</b><span class="d">クラウド LLM + TTS を接続。文単位で TTS へ流す逐次再生をここで作り込む。</span></li>
+    <li><b>sessionMachine と SQLite 永続化</b><span class="d">状態遷移を明示化し、transcript を <code>tool_calls</code> 列込みのスキーマで保存。</span></li>
+    <li><b>FoundationModels ブリッジ + コンテキスト圧縮</b><span class="d">要約生成をローカルに寄せる。<code>contextPolicy</code> は Node 上で単体テストしてから繋ぐ。</span></li>
+    <li><b>復習・フィードバック画面</b><span class="d">コールドパス。会話終了後にローカルで添削を生成して表示。</span></li>
+    <li><b>フェーズ1.5：TTS のオンデバイス化検証</b><span class="d">Kokoro-82M の試聴 → G2P 依存の確認 → 実機で RTF 実測 → A/B 判定。詳細は <a href="#p9">§09</a>。<code>TtsPort</code> の差し替えのみで完結する。</span></li>
+    <li><b>（必要なら）RealtimeSession への差し替え</b><span class="d">レイテンシが体験上のボトルネックと判断された場合のみ。アプリ層の変更は不要。</span></li>
+  </ol>
+</section>
+
+<!-- ============ 13 ============ -->
+<section id="p13">
+  <span class="sec-num">13</span>
+  <h2>不採用とした選択肢</h2>
+  <p class="intro">検討の過程で外した案と、その理由。同じ議論を繰り返さないための記録。</p>
+
+  <div class="adr">
+    <h4>Speech-to-Speech API 直結<span class="verdict keep">保留・差し替え可</span></h4>
+    <p>レイテンシは約 0.5 秒と優秀だが、月額が $25–60 とコスト要件に合わない。ただし <code>ConversationSessionPort</code> の実装を1つ足すだけで移行できる状態を維持する。</p>
+  </div>
+
+  <div class="adr">
+    <h4>Claude Pro サブスクリプションのバックエンド転用<span class="verdict">不可</span></h4>
+    <p>3つの理由で成立しない。(1) Free/Pro/Max のクレデンシャル経由でアプリのリクエストをルーティングすることは規約で明確に禁止されている。(2) リアルタイム音声 API が存在せず、本件の中核を担えない。(3) 5時間セッション制限と週次制限があり、上限に達したら待つしかない。本番用途は Console の API キー（Commercial Terms）を使う、というのが提供側の明示的な線引き。</p>
+  </div>
+
+  <div class="adr">
+    <h4>完全オンデバイス構成（Apple 標準 API のみ）<span class="verdict">一部見直し</span></h4>
+    <p><code>AVSpeechSynthesizer</code> の音声品質が機械的すぎるため、発音の手本としては不適。約3B の <code>FoundationModels</code> も指示追従が弱く、レベル調整や自然な言い直しが安定しない。<strong>ただしこの判断は Apple 標準 API を前提としたもの</strong>で、OSS の Kokoro-82M は明確に一段上の品質にある。TTS のみ <a href="#p9">フェーズ1.5</a> でローカル化を再検証する。応答生成のローカル化は引き続き不可。</p>
+  </div>
+
+  <div class="adr">
+    <h4>ExecuTorch / llama.rn による大きめのローカルモデル同梱<span class="verdict">不可</span></h4>
+    <p>Gemma 3n や Qwen3 4B クラスも動作するが、アプリに 2–4GB のモデルを同梱することになり、発熱とバッテリー消費も現実的な問題になる。個人利用の1アプリが背負うには重い。なお TTS（82M・数百MB）はこれとは桁が違うため、別途 <a href="#p9">§09</a> で検証する。</p>
+  </div>
+
+  <div class="adr">
+    <h4>TTS モデルの自前ファインチューニング<span class="verdict">当面不要</span></h4>
+    <p>学習が必要になるのは「特定の話者の声を再現したい」場合に限られる。本件の要件は発音の手本であって声の同一性ではないため、事前学習済みモデルをそのまま使う。クリーンな音声が数時間分必要で数週間かかるうえ、<strong>元モデルより品質が下がるリスクのほうが高い</strong>。要件が立った時点で Google Colab 上で実施を再検討する。</p>
+  </div>
+
+  <div class="adr">
+    <h4>API Gateway / BaaS バックエンド<span class="verdict">不要</span></h4>
+    <p>当初の設置目的は「APIキーの秘匿」と「音声パイプラインの実行」だった。個人利用でキーを SecureStore に置く方針と、STT がローカルに移ったことで、どちらの理由も消滅した。フェーズ2 の MCP サーバーとして別途復活する。</p>
+  </div>
+
+  <div class="adr">
+    <h4>DDD の戦術パターン一式<span class="verdict">過剰</span></h4>
+    <p>DDD が真価を発揮するのは複雑な業務ルールと不変条件がある場合。本アプリの難所は I/O オーケストレーションと状態遷移であり、集約ルートや Domain Event を持ち込む対象がない。<strong>依存を内向きにする原則だけを採用し、戦術パターンは捨てる</strong>のがこの規模の最適解。</p>
+  </div>
+
+  <div class="adr">
+    <h4>APIキーのバンドル埋め込み（<code>.env</code> / <code>EXPO_PUBLIC_*</code>）<span class="verdict">不可</span></h4>
+    <p>React Native はビルド時に JS バンドルへ値を埋め込むため、ハードコードと実質同じ。初回起動時に手入力し <code>expo-secure-store</code>（Keychain）へ格納する方式を採用。</p>
+  </div>
+</section>
+
+<!-- ============ 14 ============ -->
+<section id="p14">
+  <span class="sec-num">14</span>
+  <h2>未決事項</h2>
+  <div class="tw">
+  <table>
+    <thead><tr><th>項目</th><th>判断材料</th><th>タイミング</th></tr></thead>
+    <tbody>
+      <tr><td>LLM / TTS プロバイダの最終選定</td><td>実際に音声を聴き比べての品質評価が必要。特に TTS は学習用途の手本になるため慎重に</td><td class="mono">ステップ3 まで</td></tr>
+      <tr><td><s style="opacity:.5">TTS のオンデバイス化を採用するか</s><br><strong>→ 採用（2026-09-15 試聴合格）</strong></td><td>チェックリスト10項目を通過。G2P の懸念も解消済み。残るは実機性能のみ</td><td class="mono">解決済み</td></tr>
+      <tr><td>実機性能が想定内に収まるか</td><td>iPhone 16e で RTF・ピークメモリ・初回ウォームアップ時間を実測。想定を外れた場合のみクラウド TTS に差し戻す</td><td class="mono">ステップ7</td></tr>
+      <tr><td>ライブラリ選定</td><td><code>soniqo/speech-swift</code>（Core ML・INT8 量子化あり・シミュレータ可）か <code>mlalma/kokoro-ios</code>（最小構成・MLX・シミュレータ不可）か。実機実測の結果次第</td><td class="mono">ステップ7</td></tr>
+      <tr><td>状態機械を XState にするか手書き reducer か</td><td>遷移の数と、並行状態（録音中かつ再生中）の必要性次第</td><td class="mono">ステップ4</td></tr>
+      <tr><td>会話セッションの区切り方</td><td>時間ベース（15分）かターン数か。コンテキスト圧縮の挙動を見てから</td><td class="mono">ステップ5</td></tr>
+      <tr><td>フィードバックの粒度</td><td>ターンごとに添削するか、セッション全体を通した傾向分析にするか</td><td class="mono">ステップ6</td></tr>
+      <tr><td>発音採点の要否</td><td>現時点ではスコープ外。必要なら Azure Pronunciation Assessment を追加検討</td><td class="mono">フェーズ1 完了後</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<footer class="doc">
+  <p>音声英会話エージェント アーキテクチャ設計 v1.3 — フェーズ1（MVP）／フェーズ1.5（TTS ローカル化）／フェーズ2（音声エージェント化）を対象。<br>技術選定は 2026年9月 時点の iOS 26 / Apple Intelligence および OSS TTS の提供状況に基づく。<br><span style="opacity:.75">v1.3 — 試聴テスト合格により Kokoro-82M の採用を確定。§03 / §04 / §09 / §14 を更新。<br>v1.2 — §09 に G2P 調査結果（MisakiSwift により解決）とライブラリ候補比較を追加、検証手順を4ステップに再編。<br>v1.1 — §09 フェーズ1.5 を新設、§03 / §04 / §12 / §13 / §14 を更新。</span></p>
+</footer>
+
+</main>
+</div>

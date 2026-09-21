@@ -1,0 +1,49 @@
+name: VoiceLoopLab
+
+options:
+  bundleIdPrefix: dev.local
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+
+packages:
+  SpeechSwift:
+    url: https://github.com/soniqo/speech-swift
+    branch: main
+
+targets:
+  VoiceLoopLab:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: Resources/KokoroModel
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: SpeechSwift
+        product: KokoroTTS
+      - package: SpeechSwift
+        product: AudioCommon
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.local.VoiceLoopLab
+        SWIFT_VERSION: "6.0"
+        # Kokoro の重み（約318MB）はビルド時に Resources/KokoroModel として同梱
+        # される。TtsEngine がオフラインモードでそこから読み込む
+        # 実機実行には署名チームの設定が必要
+        DEVELOPMENT_TEAM: S69Y79AKRK
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_STRICT_CONCURRENCY: complete
+    info:
+      path: Sources/Info.plist
+      properties:
+        CFBundleDisplayName: VoiceLoopLab
+        UILaunchScreen: {}
+        UIRequiredDeviceCapabilities: [arm64]
+        NSMicrophoneUsageDescription: >-
+          音声ループ（録音・音声認識・エコーキャンセル）の検証にマイクを使用します。
+        NSSpeechRecognitionUsageDescription: >-
+          端末内の音声認識で発話をテキスト化します。音声は端末外に送信されません。
+        UIBackgroundModes: [audio]
