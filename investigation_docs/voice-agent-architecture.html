@@ -412,7 +412,7 @@ footer.doc a{color:var(--text-muted)}
 <div class="wrap">
 
 <header class="doc">
-  <p class="eyebrow">System Architecture · v1.4</p>
+  <p class="eyebrow">System Architecture · v1.6</p>
   <h1>音声英会話エージェント<br>アーキテクチャ設計</h1>
   <p class="lede">iPhone 上で完結する、サーバーレスのハイブリッド構成。オンデバイス処理を最大限使ってランニングコストを抑えつつ、将来の音声エージェント化に向けて拡張点を1箇所に集約する。</p>
   <div class="meta">
@@ -455,7 +455,7 @@ footer.doc a{color:var(--text-muted)}
   <p>会話中（ホットパス）はレイテンシ最優先で、余計な処理を一切挟まない。発音・文法フィードバックのような分析処理は、会話終了後（コールドパス）に非同期でまとめて実行する。ユーザーは会話が終わってから結果を見るため、体験を落とさずにコストと遅延を切り離せる。</p>
 
   <h3>2. 課金が発生しない処理はすべてローカルへ寄せる</h3>
-  <p>iPhone 16e は Apple Intelligence 対応端末であり、<code>FoundationModels</code>（約3B のオンデバイス LLM）が無料で使える。品質が体験に直結する箇所（会話生成・音声合成）に加え、<strong>STT も地域制限により実質クラウド行き</strong>（<a href="#p13">§13</a>）になったが、原則そのものは変わらず、課金が発生しない処理は引き続きローカルに置く。</p>
+  <p>iPhone 16e は Apple Intelligence 対応端末であり、<code>FoundationModels</code>（約3B のオンデバイス LLM）が無料で使える。品質が体験に直結する箇所（会話生成・音声合成）だけをクラウドに残し、それ以外はローカルに置く。<strong>STT も <code>DictationTranscriber</code> によりこのローカル・無料側に残った</strong>（<a href="#p13">§13</a>）。</p>
 
   <h3>3. 差し替え点を1箇所に集約する</h3>
   <p>「カスケード構成」と「Speech-to-Speech 構成」は、外から見れば同じ責務を果たす。両者を <code>ConversationSessionPort</code> という単一のインターフェースの裏に隠し、アプリ層が実装を知らない状態を保つ。フェーズ2 のエージェント化もこの境界の上に載る。</p>
@@ -497,7 +497,7 @@ footer.doc a{color:var(--text-muted)}
     <div class="layer">
       <div class="layer-title"><span>Adapters</span></div>
       <div class="nodes">
-        <div class="node cloud">Deepgram STT<span class="sub">ストリーミング / 従量</span></div>
+        <div class="node local">DictationTranscriber STT<span class="sub">Swift ブリッジ / 無料（採用確定・§13）</span></div>
         <div class="node local">FoundationModels<span class="sub">要約・添削 / 無料</span></div>
         <div class="node local">expo-sqlite<span class="sub">会話履歴</span></div>
         <div class="node cloud">Text LLM<span class="sub">応答生成 / 従量</span></div>
@@ -512,8 +512,8 @@ footer.doc a{color:var(--text-muted)}
   </div>
 
   <div class="note key">
-    <span class="label">Key decision（2026-09-21 更新）</span>
-    <p>課金対象は <strong>Deepgram STT・テキスト LLM・TTS の3つ</strong>。要約・履歴保存・文法添削は引き続き無料でオフライン動作する。当初 STT も無料オンデバイスの想定だったが、<a href="#p13">§13</a> の通り地域制限により撤回した。</p>
+    <span class="label">Key decision（2026-09-22 更新）</span>
+    <p>課金対象は <strong>テキスト LLM と TTS の2つ</strong>のまま維持できる見込み。STT は一時クラウド化（Deepgram）を検討したが、本アプリが個人利用限定であるため<a href="#p13">§13</a> の通り <code>DictationTranscriber</code> 経由でオンデバイス・無料のまま採用を確定した。未インストール言語の新規ダウンロードは依然として通らない不具合が残るが、個人が使う端末には既に英語アセットがあることを実機確認済みであり、この用途では問題にならない。要約・履歴保存・文法添削は引き続き無料でオフライン動作する。</p>
   </div>
 </section>
 
@@ -528,9 +528,9 @@ footer.doc a{color:var(--text-muted)}
     <tbody>
       <tr>
         <td class="mono">STT</td>
-        <td class="mono">Deepgram<br>（Nova-3・ストリーミング）</td>
-        <td><span class="pill cloud">CLOUD</span></td>
-        <td>当初 <code>SpeechAnalyzer</code>（オンデバイス・無料）を採用していたが、日本リージョンの実機検証で英語ロケールのモデル資産インストールが完了しない不具合を確認（<a href="#p13">§13</a>）。ストリーミング特化で低遅延・比較的安価な Deepgram に変更</td>
+        <td class="mono"><code>DictationTranscriber</code><br>（採用確定・§13参照）</td>
+        <td><span class="pill local">LOCAL</span></td>
+        <td>当初の <code>SpeechTranscriber</code> は新規ロケールの資産ダウンロードが進まない不具合があったが、同じ <code>Speech</code> フレームワーク内の別モジュール <code>DictationTranscriber</code> なら端末に既にあるアセットを使って英語（en-US）を実機で認識できることを確認（自己診断・実際のマイク入力の両方）。fr-FR での追試で<strong>未インストールのロケールは同じく新規に入れられない</strong>ことも確認したが、本アプリは個人利用限定で使用端末には英語アセットが既にあるため実運用上の問題にならない。よって Deepgram（クラウド）は不要と判断（<a href="#p13">§13</a>）</td>
       </tr>
       <tr>
         <td class="mono">応答生成</td>
@@ -595,16 +595,16 @@ footer.doc a{color:var(--text-muted)}
   <table>
     <thead><tr><th>区間</th><th>処理</th><th class="num" style="text-align:right">目安</th></tr></thead>
     <tbody>
-      <tr><td class="mono">1</td><td>発話終了検知 → 確定テキスト <span class="pill cloud">CLOUD</span></td><td class="num">0.2 – 0.4 s</td></tr>
+      <tr><td class="mono">1</td><td>発話終了検知 → 確定テキスト <span class="pill local">LOCAL</span></td><td class="num">0.1–0.2 s</td></tr>
       <tr><td class="mono">2</td><td>LLM 1文目の生成完了 <span class="pill cloud">CLOUD</span></td><td class="num">0.4 – 0.7 s</td></tr>
       <tr><td class="mono">3</td><td>TTS 最初の音声が鳴るまで <span class="pill cloud">CLOUD</span></td><td class="num">0.3 – 0.5 s</td></tr>
     </tbody>
-    <tfoot><tr><td></td><td>体感レイテンシ</td><td class="num">約 1.1 – 1.6 s</td></tr></tfoot>
+    <tfoot><tr><td></td><td>体感レイテンシ</td><td class="num">約 0.8–1.4 s</td></tr></tfoot>
   </table>
   </div>
-  <p>区間1が <span class="pill local">LOCAL</span> から <span class="pill cloud">CLOUD</span> に変わった分（<a href="#p13">§13</a>）、体感レイテンシは若干悪化しているが、Deepgram はストリーミング特化で低遅延なので許容範囲に収まっている。</p>
+  <p>区間1は <code>DictationTranscriber</code>（オンデバイス）採用確定により、ネットワーク往復なしで元の見積もり通り（<a href="#p13">§13</a>）。</p>
   <p>Speech-to-Speech 構成の約 0.5 秒には及ばないが、<strong>英会話学習という用途ではむしろ許容範囲</strong>。ネイティブ同士の会話より一拍空く程度で、学習者が聞き取って考える間として自然に働く。</p>
-  <p>なお <a href="#p9">フェーズ1.5</a> で TTS をオンデバイス化すると区間3のネットワーク往復が消え、<strong>合計 0.8 – 1.2 秒</strong>まで縮む見込み。</p>
+  <p>なお <a href="#p9">フェーズ1.5</a> で TTS をオンデバイス化すると区間3のネットワーク往復が消え、<strong>合計 0.5–1.0 s</strong>まで縮む見込み。</p>
 
   <div class="note">
     <span class="label">実装上の必須テクニック</span>
@@ -616,17 +616,17 @@ footer.doc a{color:var(--text-muted)}
   <table>
     <thead><tr><th>項目</th><th>構成</th><th class="num" style="text-align:right">月額目安</th></tr></thead>
     <tbody>
-      <tr><td>STT</td><td>Deepgram・ストリーミング（<a href="#p13">§13</a>）</td><td class="num">$6 前後</td></tr>
+      <tr><td>STT</td><td><code>DictationTranscriber</code>（オンデバイス採用確定）<span class="pill local">LOCAL</span>（<a href="#p13">§13</a>）</td><td class="num">$0</td></tr>
       <tr><td>応答生成</td><td>mini クラス・テキストのみ</td><td class="num">数ドル未満</td></tr>
       <tr><td>TTS</td><td>支配的コスト・約 $0.3/時</td><td class="num">$6 前後</td></tr>
       <tr><td>要約・添削</td><td>オンデバイス <span class="pill local">LOCAL</span></td><td class="num">$0</td></tr>
       <tr><td>サーバー</td><td>なし</td><td class="num">$0</td></tr>
     </tbody>
-    <tfoot><tr><td colspan="2">合計</td><td class="num">$12 – 18</td></tr></tfoot>
+    <tfoot><tr><td colspan="2">合計</td><td class="num">$5–10</td></tr></tfoot>
   </table>
   </div>
-  <p>比較対象として、Realtime API 直結（mini）の場合は同条件で <strong>$25 – 60</strong> 程度。ストリーミング STT と逐次 TTS の採用で、およそ半分以下に収まっている。</p>
-  <p><a href="#p9">フェーズ1.5</a> の TTS ローカル化（採用確定・VoiceLoopLab で動作確認済み）が完了すると、課金対象は <strong>Deepgram STT とテキスト LLM の2つ</strong>になり、月 $10 前後まで下がる見込み。STT がクラウドに残る分、当初想定していた「実質無料」までは届かない。</p>
+  <p>比較対象として、Realtime API 直結（mini）の場合は同条件で <strong>$25 – 60</strong> 程度。十分に安い。</p>
+  <p><a href="#p9">フェーズ1.5</a> の TTS ローカル化（採用確定・VoiceLoopLab で動作確認済み）が完了すると、STTもオンデバイスのため<strong>課金対象がテキストLLMのみ・月数ドル未満</strong>になる。</p>
 </section>
 
 <!-- ============ 05 ============ -->
@@ -651,7 +651,7 @@ footer.doc a{color:var(--text-muted)}
     session/
       CascadeSession.ts            <span class="c"># Stt+Llm+Tts を合成（フェーズ1採用）</span>
       RealtimeSession.ts           <span class="c"># Speech-to-Speech 直結（将来の差し替え先）</span>
-    stt/DeepgramStt.ts             <span class="c"># WebSocket ストリーミング（§13）</span>
+    stt/DictationTranscriberStt.ts <span class="c"># ← Swift ブリッジ、採用確定（§13）</span>
     summarizer/FoundationModelsSummarizer.ts  <span class="c"># ← Swift ブリッジ</span>
     llm/OpenAiLlm.ts
     tts/StreamingTts.ts
@@ -1004,7 +1004,7 @@ footer.doc a{color:var(--text-muted)}
 
   <ol class="steps">
     <li><b><s style="opacity:.5">音声ループ単体の検証</s> — 完了（2026-09-21, VoiceLoopLab）</b><span class="d"><code>AVAudioSession</code> の AEC 設定、録音 → 再生 → barge-in。実機（iPhone 16e / iOS 26.6）で会話ループ・barge-in 検出が連続で動作することを確認済み。<strong>最大の技術リスクだったが解消。</strong></span></li>
-    <li><b>Deepgram STT 接続</b><span class="d">ネイティブブリッジ不要——WebSocket でストリーミング音声を送り、逐次テキストを JS 側で受ける。当初想定していた Swift ブリッジ（<code>SpeechAnalyzer</code>）は地域制限のため不採用（<a href="#p13">§13</a>）。</span></li>
+    <li><b>STT 接続（採用確定、§13参照）</b><span class="d">当初想定の <code>SpeechTranscriber</code> Swift ブリッジは新規ロケールの資産ダウンロードが進まない不具合あり。<code>DictationTranscriber</code>（同じくSwiftブリッジ、オンデバイス）に切り替えて実機確認済み。未インストール言語の新規取得は同じ不具合で通らないと判明したが、個人利用限定というスコープではこの制約は問題にならないため採用を確定。</span></li>
     <li><b>CascadeSession の実装</b><span class="d">クラウド LLM + TTS を接続。文単位で TTS へ流す逐次再生をここで作り込む。</span></li>
     <li><b>sessionMachine と SQLite 永続化</b><span class="d">状態遷移を明示化し、transcript を <code>tool_calls</code> 列込みのスキーマで保存。</span></li>
     <li><b>FoundationModels ブリッジ + コンテキスト圧縮</b><span class="d">要約生成をローカルに寄せる。<code>contextPolicy</code> は Node 上で単体テストしてから繋ぐ。</span></li>
@@ -1021,11 +1021,19 @@ footer.doc a{color:var(--text-muted)}
   <p class="intro">検討の過程で外した案と、その理由。同じ議論を繰り返さないための記録。</p>
 
   <div class="adr">
-    <h4><code>SpeechAnalyzer</code>（オンデバイス STT）<span class="verdict">不可（地域制限）</span></h4>
-    <p>§03 で当初採用していたが、VoiceLoopLab による実機検証（iPhone 16e / iOS 26.6、日本リージョン）で、英語ロケール（en-US・en-GB）のモデル資産インストールが <code>AssetInventory.assetInstallationRequest</code> → <code>downloadAndInstall()</code> の時点で無期限にハングすることを確認した。日本語（ja-JP、この端末で既に利用実績あり）は同じコードで問題なく完了したため、コード側の実装ミスではなく、<strong>日本リージョンでの英語オンデバイス音声認識アセットの提供が制限されている</strong>ことが原因と判断した。</p>
-    <p style="margin-top:10px">切り分けのために確認・除外した要因: ストレージ容量、Apple Intelligence の有効化、端末再起動、AssetInventory の予約状態、ネットワーク到達性、デバッガ経由の起動、SDK/OS バージョンの差異（iOS 27 SDK でビルド・iOS 26.6 実機）、言語設定（英語は「使用する言語」に登録済み）、実装の書き方（公式サンプル <code>SpeechAnalyzerSample</code> と同一の初期化オプションに変更しても再現）。標準のディクテーション機能は正常動作したため、端末・OS 全体が壊れているわけでもない。</p>
-    <p style="margin-top:10px"><strong>制限の範囲は Apple Intelligence 全体ではなく SpeechAnalyzer 固有と判明（2026-09-21）。</strong> 同じ Apple Intelligence 系 API である <code>FoundationModels</code> を同一端末で英語テキストに対して試したところ、<code>availability: available</code>・英語での要約生成とも正常に完了した。この結果から、他の技術選定（LLM・Kokoro TTS・FoundationModels・永続化）を見直す必要はないと判断した。</p>
-    <p style="margin-top:10px">代替として <a href="#p3">§03</a> の通り Deepgram（クラウド・ストリーミング）を採用する。<code>speech-swift</code> パッケージが同梱する完全オンデバイスの Whisper / Parakeet / Canary 等の代替も検討したが（244MB〜1.5GB）、地域制限を受けないクラウドサービスの方が確実で、実装コストも低いと判断した。</p>
+    <h4><code>SpeechTranscriber</code>（新STT、オンデバイス）<span class="verdict">不可（新規ロケールの資産DLが進まない）</span></h4>
+    <p>§03 で当初採用していたが、VoiceLoopLab による実機検証（iPhone 16e / iOS 26.6）で、<code>AssetInventory.assetInstallationRequest</code> → <code>downloadAndInstall()</code> が無期限にハングすることを確認した。</p>
+    <p style="margin-top:10px"><strong>2026-09-21 時点の結論（誤り、下記参照）:</strong> 英語（en-US・en-GB）だけ再現し日本語（ja-JP）は問題なく完了したため、日本リージョンでの英語オンデバイス音声認識アセットの提供制限が原因と判断した。切り分けのために確認・除外した要因: ストレージ容量、Apple Intelligence の有効化、端末再起動、AssetInventory の予約状態、ネットワーク到達性、デバッガ経由の起動、SDK/OS バージョンの差異（iOS 27 SDK でビルド・iOS 26.6 実機）、言語設定（英語は「使用する言語」に登録済み）、実装の書き方（公式サンプル <code>SpeechAnalyzerSample</code> と同一の初期化オプションに変更しても再現）。</p>
+    <p style="margin-top:10px"><strong>2026-09-22 訂正:</strong> 地域制限ではなかった。<code>SpeechTranscriber.installedLocales</code> を確認すると、ja-JP は既にこの端末にインストール済みだった——「動いた」のは新規ダウンロードではなく、単に不要だっただけ。実際に起きているのは<strong>「端末に未インストールのロケールでは、言語を問わず資産ダウンロードが進まない」</strong>という不具合で、英語固有でも地域固有でもない。OS側でなぜ止まるのかは依然不明（次に調べるなら端末のシステムログ）。</p>
+    <p style="margin-top:10px">なお、この制限は Apple Intelligence 全体ではなく <code>SpeechTranscriber</code> のこの経路に固有と確認済み。同じ Apple Intelligence 系 API である <code>FoundationModels</code> を同一端末で英語テキストに対して試したところ、<code>availability: available</code>・英語での要約生成とも正常に完了しており、他の技術選定（LLM・Kokoro TTS・FoundationModels・永続化）を見直す必要はない。</p>
+  </div>
+
+  <div class="adr">
+    <h4><code>DictationTranscriber</code>（旧STT系統、オンデバイス）<span class="verdict keep">採用確定</span></h4>
+    <p>同じ <code>Speech</code> フレームワーク内にある別モジュールで、キーボード音声入力・旧 <code>SFSpeechRecognizer</code> と同系統の資産を使う。この端末では en-US・ja-JP とも既にインストール済みで、<code>SpeechTranscriber</code> の壊れたダウンロード経路を経由せずに使える。</p>
+    <p style="margin-top:10px"><strong>実機で確認済み（2026-09-22）:</strong> (1) Kokoro で合成した英語音声を直接流し込む自己診断テストで、入力文とほぼ一致する文字起こしを取得。(2) 実際にマイクへ英語で話しかけ、会話中に正しく認識・確定（ログに <code>認識(確定): ...</code> として記録）。</p>
+    <p style="margin-top:10px"><strong>追試で判明した既知の制約（受容済み）:</strong> <strong>端末に一度も入っていない言語を、DictationTranscriber が新規にダウンロードできるか</strong>を fr-FR（この端末に未インストールのロケール）で追試したところ、<code>SpeechTranscriber</code> と同じ「新規ダウンロードが進まない」不具合を確認した。一般ユーザー向けアプリなら「英語を一度も使ったことがない端末では動かない」という本番導入不可のバグになるところだが、<strong>本アプリは個人利用限定であり、使用する端末（この iPhone）には英語アセットが既にインストール済みであることを確認している</strong>ため、この制約は実運用上の問題にならない。</p>
+    <p style="margin-top:10px"><strong>判定・最終: 採用確定（オンデバイス・無料）。Deepgram（クラウド・ストリーミング）は個人利用では不要と判断し導入しない</strong>（§03参照）。もし将来、英語アセット未インストールの端末で動かす必要が生じた場合は、Deepgram、または <code>speech-swift</code> パッケージが同梱する完全オンデバイスの Whisper / Parakeet / Canary 等（244MB〜1.5GB）が代替として選定済みのフォールバックになる。</p>
   </div>
 
   <div class="adr">
@@ -1081,7 +1089,7 @@ footer.doc a{color:var(--text-muted)}
       <tr><td><s style="opacity:.5">TTS のオンデバイス化を採用するか</s><br><strong>→ 採用（2026-09-15 試聴合格）</strong></td><td>チェックリスト10項目を通過。G2P の懸念も解消済み</td><td class="mono">解決済み</td></tr>
       <tr><td>実機性能が想定内に収まるか</td><td>VoiceLoopLab で会話ループ・barge-in が体感良好に動作することは確認済み（2026-09-21）。RTF・ピークメモリ・初回ウォームアップの具体的な数値はアプリの「計測」表示から別途記録する</td><td class="mono">数値記録待ち</td></tr>
       <tr><td><s style="opacity:.5">ライブラリ選定</s><br><strong>→ <code>soniqo/speech-swift</code> に確定</strong></td><td>VoiceLoopLab で実機動作を確認済み。<code>mlalma/kokoro-ios</code>（MLX・シミュレータ不可）は不採用</td><td class="mono">解決済み</td></tr>
-      <tr><td><s style="opacity:.5">STT プロバイダの最終選定</s><br><strong>→ Deepgram（クラウド）に変更</strong></td><td><code>SpeechAnalyzer</code> は日本リージョンで英語ロケールが機能せず不採用（<a href="#p13">§13</a>）。プラン・料金体系の詳細確定は実装時</td><td class="mono">方針決定済み</td></tr>
+      <tr><td><s style="opacity:.5">STT の最終選定</s><br><strong>→ <code>DictationTranscriber</code> に確定</strong></td><td><code>SpeechTranscriber</code>は新規ロケールの資産DLが進まず不採用。<code>DictationTranscriber</code>で英語（既存インストール分）の自己診断・マイク認識とも実機確認済み。未インストール言語の新規DLは同じ不具合で通らないことをfr-FRで確認したが、個人利用限定のため実運用上は問題なし。Deepgram（クラウド）は不要（<a href="#p13">§13</a>）</td><td class="mono">解決済み</td></tr>
       <tr><td>状態機械を XState にするか手書き reducer か</td><td>遷移の数と、並行状態（録音中かつ再生中）の必要性次第</td><td class="mono">ステップ4</td></tr>
       <tr><td>会話セッションの区切り方</td><td>時間ベース（15分）かターン数か。コンテキスト圧縮の挙動を見てから</td><td class="mono">ステップ5</td></tr>
       <tr><td>フィードバックの粒度</td><td>ターンごとに添削するか、セッション全体を通した傾向分析にするか</td><td class="mono">ステップ6</td></tr>
@@ -1092,7 +1100,7 @@ footer.doc a{color:var(--text-muted)}
 </section>
 
 <footer class="doc">
-  <p>音声英会話エージェント アーキテクチャ設計 v1.4 — フェーズ1（MVP）／フェーズ1.5（TTS ローカル化）／フェーズ2（音声エージェント化）を対象。<br>技術選定は 2026年9月 時点の iOS 26 / Apple Intelligence および OSS TTS の提供状況に基づく。<br><span style="opacity:.75">v1.4 — VoiceLoopLab の実機検証結果を反映。音声ループ（AEC/barge-in）は動作確認済みに更新。<code>SpeechAnalyzer</code> は日本リージョンで英語ロケールが機能しないことが判明し不採用、Deepgram（クラウド・ストリーミング）に変更。§01 / §02 / §03 / §04 / §05 / §12 / §13 / §14 を更新。<br>v1.3 — 試聴テスト合格により Kokoro-82M の採用を確定。§03 / §04 / §09 / §14 を更新。<br>v1.2 — §09 に G2P 調査結果（MisakiSwift により解決）とライブラリ候補比較を追加、検証手順を4ステップに再編。<br>v1.1 — §09 フェーズ1.5 を新設、§03 / §04 / §12 / §13 / §14 を更新。</span></p>
+  <p>音声英会話エージェント アーキテクチャ設計 v1.6 — フェーズ1（MVP）／フェーズ1.5（TTS ローカル化）／フェーズ2（音声エージェント化）を対象。<br>技術選定は 2026年9月 時点の iOS 26 / Apple Intelligence および OSS TTS の提供状況に基づく。<br><span style="opacity:.75">v1.6 — 本アプリは個人利用限定というスコープを明確化し、STTの最終選定を確定。fr-FR追試で <code>DictationTranscriber</code> も未インストールロケールの新規DLは通らないと判明したが、個人が使う端末には英語アセットが既にあるため実運用上は問題にならないと判断し、<code>DictationTranscriber</code>（オンデバイス・無料）の採用を確定、Deepgramは不要と結論。§01 / §02 / §03 / §04 / §05 / §12 / §13 / §14 を更新。<br>v1.5 — v1.4 の「日本リージョンで英語オンデバイスSTTが不可」という結論を訂正。原因は地域制限ではなく「未インストールロケールの資産DLが進まない」不具合で、<code>DictationTranscriber</code>経由なら英語もオンデバイスで動作することを実機確認（自己診断・マイク入力とも）。未インストール言語の新規DL可否のみ最終確認待ちとし、Deepgramは暫定フォールバックに格下げ。§01 / §02 / §03 / §04 / §05 / §12 / §13 / §14 を更新。<br>v1.4 — VoiceLoopLab の実機検証結果を反映。音声ループ（AEC/barge-in）は動作確認済みに更新。<code>SpeechAnalyzer</code> は日本リージョンで英語ロケールが機能しないことが判明し不採用、Deepgram（クラウド・ストリーミング）に変更。§01 / §02 / §03 / §04 / §05 / §12 / §13 / §14 を更新。<br>v1.3 — 試聴テスト合格により Kokoro-82M の採用を確定。§03 / §04 / §09 / §14 を更新。<br>v1.2 — §09 に G2P 調査結果（MisakiSwift により解決）とライブラリ候補比較を追加、検証手順を4ステップに再編。<br>v1.1 — §09 フェーズ1.5 を新設、§03 / §04 / §12 / §13 / §14 を更新。</span></p>
 </footer>
 
 </main>

@@ -29,12 +29,21 @@ actor Transcriber {
         }
     }
 
+    /// どちらも SpeechAnalyzer に載るモジュールだが、モデル資産の系統が違う。
+    /// SpeechTranscriber は新しい汎用モデル、DictationTranscriber は
+    /// キーボード音声入力・旧 API（SFSpeechRecognizer）と同系統のモデル。
+    enum Engine: String, Sendable {
+        case speech, dictation
+    }
+
     struct Update: Sendable {
         let text: String
         let isFinal: Bool
     }
 
-    private var transcriber: SpeechTranscriber?
+    private var speechTranscriber: SpeechTranscriber?
+    private var dictationTranscriber: DictationTranscriber?
+    private var module: (any SpeechModule)? { speechTranscriber ?? dictationTranscriber }
     private var analyzer: SpeechAnalyzer?
     private var continuation: AsyncStream<AnalyzerInput>.Continuation?
     private var consumerTask: Task<Void, Never>?
@@ -46,30 +55,57 @@ actor Transcriber {
     /// `onProgress` は `AssetInstallationRequest` が `ProgressReporting` に
     /// 準拠している（`.progress` が Foundation の `Progress`）ことを利用して、
     /// ダウンロードが進んでいるかを外から見えるようにするために追加した。
-    func prepare(locale: Locale = Locale(identifier: "en-US"),
-                 naturalFormat: AVAudioFormat?,
-                 onProgress: (@Sendable (Double, String) -> Void)? = nil) async throws {
-        onProgress?(0, "SpeechTranscriber の利用可否を確認中")
-        guard SpeechTranscriber.isAvailable else { throw TranscriberError.unavailable }
-        onProgress?(0, "ロケール確認中")
-        guard let supported = await SpeechTranscriber.supportedLocale(equivalentTo: locale) else {
-            throw TranscriberError.unsupportedLocale
+    ///
+    /// `prepare` から切り離してあるのは、AVAudioEngine（voice processing）の
+    /// 起動前後どちらでインストールするかを切り替えて、ハングの原因を
+    /// 切り分けられるようにするため。
+    func installAssets(locale: Locale,
+                       engine: Engine = .speech,
+                       releaseReservations: Bool = true,
+                       onProgress: (@Sendable (Double, String) -> Void)? = nil) async throws {
+        onProgress?(0, "エンジン=\(engine.rawValue) の利用可否を確認中")
+        let t: any SpeechModule
+        let supported: Locale
+        let installedLocales: [Locale]
+        switch engine {
+        case .speech:
+            guard SpeechTranscriber.isAvailable else { throw TranscriberError.unavailable }
+            onProgress?(0, "ロケール確認中")
+            guard let s = await SpeechTranscriber.supportedLocale(equivalentTo: locale) else {
+                throw TranscriberError.unsupportedLocale
+            }
+            // preset を変えてもハングは再現したため、リアルタイム性を優先する
+            // .progressiveTranscription に戻す（ハングの原因は未確定。地域制限説は
+            // 「ja-JP は既にインストール済みだった」可能性と交絡している）。
+            let st = SpeechTranscriber(locale: s, preset: .progressiveTranscription)
+            speechTranscriber = st
+            t = st
+            supported = s
+            installedLocales = await SpeechTranscriber.installedLocales
+        case .dictation:
+            onProgress?(0, "ロケール確認中")
+            guard let s = await DictationTranscriber.supportedLocale(equivalentTo: locale) else {
+                throw TranscriberError.unsupportedLocale
+            }
+            let dt = DictationTranscriber(locale: s, preset: .progressiveLongDictation)
+            dictationTranscriber = dt
+            t = dt
+            supported = s
+            installedLocales = await DictationTranscriber.installedLocales
         }
-
-        // ハングの原因は preset ではなくロケール（地域制限）だったと判明したため、
-        // リアルタイム性を優先する .progressiveTranscription に戻す。
-        let t = SpeechTranscriber(locale: supported, preset: .progressiveTranscription)
 
         let preStatus = await AssetInventory.status(forModules: [t])
         let reserved = await AssetInventory.reservedLocales
-        let installedLocales = await Set(SpeechTranscriber.installedLocales)
         let alreadyInstalled = installedLocales.map(\.identifier).contains(supported.identifier)
-        onProgress?(0, "事前状態: status=\(preStatus) reservedLocales=\(reserved.map(\.identifier)) installed=\(alreadyInstalled)")
+        onProgress?(0, "事前状態: locale=\(supported.identifier) status=\(preStatus) reservedLocales=\(reserved.map(\.identifier)) installed=\(alreadyInstalled)")
+        // 「ja-JP は動く」が、単にダウンロード不要だった（既にインストール済み）
+        // だけなのかを判別するため、インストール済みロケールを全部出す。
+        onProgress?(0, "インストール済み(\(engine.rawValue)): \(installedLocales.map(\.identifier).sorted())")
 
         // 既存の予約が壊れている/中途半端な可能性を疑い、一度解放してから
         // インストール要求をやり直す。release は失敗しても無視してよい
         // （そもそも予約が無ければ false が返るだけ）。
-        for locale in reserved {
+        for locale in reserved where releaseReservations {
             let released = await AssetInventory.release(reservedLocale: locale)
             onProgress?(0, "予約解放: \(locale.identifier) -> \(released)")
         }
@@ -93,6 +129,58 @@ actor Transcriber {
         guard await AssetInventory.status(forModules: [t]) == .installed else {
             throw TranscriberError.assetsNotInstalled
         }
+    }
+
+    /// 旧 API（SFSpeechRecognizer）でオンデバイス認識を一度起動し、反応をログに出す。
+    /// 旧 API 経由なら同じロケールのアセットが入るか（＝ AssetInventory 経由の
+    /// ダウンロードだけが止まっているのか）を切り分けるためのプローブ。
+    /// 1秒の無音を流して endAudio し、結果かエラーを最大15秒待つ。
+    static func probeLegacyOnDevice(locale: Locale,
+                                    log: @escaping @Sendable (String) -> Void) async {
+        let auth = await withCheckedContinuation { c in
+            SFSpeechRecognizer.requestAuthorization { c.resume(returning: $0) }
+        }
+        log("旧API 認可状態: \(auth.rawValue)（3 = authorized）")
+        guard auth == .authorized, let r = SFSpeechRecognizer(locale: locale) else {
+            log("旧API: SFSpeechRecognizer を使えない")
+            return
+        }
+        log("旧API: isAvailable=\(r.isAvailable) supportsOnDeviceRecognition=\(r.supportsOnDeviceRecognition)")
+
+        let req = SFSpeechAudioBufferRecognitionRequest()
+        req.requiresOnDeviceRecognition = true
+        guard let fmt = AVAudioFormat(standardFormatWithSampleRate: 16_000, channels: 1),
+              let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: 16_000),
+              let samples = buf.floatChannelData?[0]
+        else { return }
+        buf.frameLength = 16_000
+        samples.update(repeating: 0, count: 16_000)
+
+        let (events, cont) = AsyncStream<String>.makeStream()
+        let task = r.recognitionTask(with: req) { result, error in
+            if let error {
+                cont.yield("旧API: エラー \(error)")
+                cont.finish()
+            } else if let result, result.isFinal {
+                cont.yield("旧API: 完了 '\(result.bestTranscription.formattedString)'")
+                cont.finish()
+            }
+        }
+        req.append(buf)
+        req.endAudio()
+        let timeout = Task {
+            try? await Task.sleep(for: .seconds(15))
+            cont.yield("旧API: 15秒応答なし")
+            cont.finish()
+        }
+        for await e in events { log(e) }
+        timeout.cancel()
+        task.cancel()
+    }
+
+    /// `installAssets` 済みであることが前提。
+    func prepare(naturalFormat: AVAudioFormat?) async throws {
+        guard let t = module else { throw TranscriberError.assetsNotInstalled }
 
         guard let format = await SpeechAnalyzer.bestAvailableAudioFormat(
             compatibleWith: [t], considering: naturalFormat
@@ -101,14 +189,15 @@ actor Transcriber {
         let a = SpeechAnalyzer(modules: [t])
         try await a.prepareToAnalyze(in: format)
 
-        self.transcriber = t
         self.analyzer = a
         self.analyzerFormat = format
     }
 
     /// 認識を開始し、更新を AsyncStream で返す。
     func start() async throws -> AsyncStream<Update> {
-        guard let analyzer, let transcriber else { throw TranscriberError.unavailable }
+        guard let analyzer, module != nil else { throw TranscriberError.unavailable }
+        let speechTranscriber = self.speechTranscriber
+        let dictationTranscriber = self.dictationTranscriber
 
         let (inputStream, inputCont) = AsyncStream<AnalyzerInput>.makeStream()
         self.continuation = inputCont
@@ -117,10 +206,18 @@ actor Transcriber {
         let (updates, updatesCont) = AsyncStream<Update>.makeStream()
         consumerTask = Task {
             do {
-                for try await result in transcriber.results {
-                    updatesCont.yield(
-                        Update(text: String(result.text.characters), isFinal: result.isFinal)
-                    )
+                if let speechTranscriber {
+                    for try await result in speechTranscriber.results {
+                        updatesCont.yield(
+                            Update(text: String(result.text.characters), isFinal: result.isFinal)
+                        )
+                    }
+                } else if let dictationTranscriber {
+                    for try await result in dictationTranscriber.results {
+                        updatesCont.yield(
+                            Update(text: String(result.text.characters), isFinal: result.isFinal)
+                        )
+                    }
                 }
             } catch {
                 // 認識側のエラーはストリーム終了として扱う

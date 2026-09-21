@@ -36,6 +36,28 @@ final class VoiceLoop {
     /// 会話ループに邪魔されず確認するためのモード。
     var transcribeOnly = false
 
+    /// STT のロケール。英語だけが固まるのか（地域制限説）、未インストールの
+    /// ロケールならどれでも固まるのか（ダウンロード経路の問題）を切り分けるため、
+    /// 画面から差し替えられるようにしている。
+    var sttLocaleID = "en-US"
+
+    /// true なら AVAudioEngine（voice processing）を起動する前にアセットを
+    /// インストールする。音声セッションがダウンロードを妨げていないかの切り分け用。
+    var installAssetsBeforeAudio = false
+
+    /// false ならインストール要求前の予約解放をしない。解放直後の再要求が
+    /// ダウンロードを止めていないかの切り分け用。
+    var releaseReservationsBeforeInstall = true
+
+    /// true ならインストール要求の前に旧 API（SFSpeechRecognizer）の
+    /// オンデバイス認識を一度起動する。切り分け用。
+    var probeLegacyOnDevice = false
+
+    /// SpeechAnalyzer に載せる認識モジュール。SpeechTranscriber の資産DLが
+    /// どのロケールでも進まないため、既に端末にある可能性が高い
+    /// DictationTranscriber（キーボード音声入力と同系統）と切り替えて比べる。
+    var sttEngine: Transcriber.Engine = .speech
+
     // 計測値
     private(set) var inputFormatDescription = "—"
     private(set) var voiceProcessingEnabled = false
@@ -79,6 +101,12 @@ final class VoiceLoop {
 
         do {
             try await host.requestMicPermission()
+
+            let t = Transcriber()
+            if installAssetsBeforeAudio {
+                try await installSTTAssets(t)
+            }
+
             try host.start()
 
             voiceProcessingEnabled = host.voiceProcessingEnabled
@@ -89,32 +117,16 @@ final class VoiceLoop {
             add("Voice Processing: \(voiceProcessingEnabled ? "有効" : "無効")")
             add("入力フォーマット: \(inputFormatDescription)")
 
+            if !installAssetsBeforeAudio {
+                try await installSTTAssets(t)
+            }
+
             // AVAudioEngine 起動 → 実際のマイクフォーマットが確定してから
             // SpeechAnalyzer を準備する（naturalFormat にマイクの実フォーマットを
             // 渡すことで、変換なし/最小限で済むフォーマットを選ばせる）。
-            // 起動順序を先に入れ替える実験をしたが、それは元のハング（地域制限）
-            // の原因ではなく、naturalFormat を nil にした副作用で認識が全く
-            // 動かなくなっていたので元に戻した。
-            add("SpeechAnalyzer 準備中…（初回は音声認識モデルのDLで時間がかかる）")
-            let t = Transcriber()
-            // en-US/en-GB は日本リージョンの実機でハングすることを確認済み
-            // （設計書 §13）。Kokoro の実機性能測定を続けるため、動作確認済みの
-            // ja-JP を暫定で使う。本番の英語認識は Deepgram（クラウド）へ移行する。
-            try await t.prepare(locale: Locale(identifier: "ja-JP"), naturalFormat: host.inputFormat) { [weak self] fraction, stage in
-                Task { @MainActor in
-                    guard let self else { return }
-                    let percent = Int(fraction * 100)
-                    // 段階が変わった時、または10%刻みで進んだ時だけログに出す
-                    // （毎300msそのまま出すとログが埋まってしまうため）
-                    if stage != self.lastLoggedSTTStage
-                        || percent / 10 != self.lastLoggedSTTProgress / 10
-                        || percent == 100 {
-                        self.lastLoggedSTTStage = stage
-                        self.lastLoggedSTTProgress = percent
-                        self.add("STT: \(stage) (\(percent)%)")
-                    }
-                }
-            }
+            // アセットのインストールだけは上で起動前に移せるが、naturalFormat は
+            // nil にしないこと（nil にすると認識が全く動かなくなった）。
+            try await t.prepare(naturalFormat: host.inputFormat)
             transcriber = t
             add("SpeechAnalyzer 準備完了")
 
@@ -146,6 +158,32 @@ final class VoiceLoop {
             errorMessage = error.localizedDescription
             add("エラー: \(error.localizedDescription)")
             state = .failed
+        }
+    }
+
+    private func installSTTAssets(_ t: Transcriber) async throws {
+        if probeLegacyOnDevice {
+            await Transcriber.probeLegacyOnDevice(locale: Locale(identifier: sttLocaleID)) { [weak self] m in
+                Task { @MainActor in self?.add(m) }
+            }
+        }
+        add("STT アセット準備中… engine=\(sttEngine.rawValue) locale=\(sttLocaleID) タイミング=\(installAssetsBeforeAudio ? "音声エンジン起動前" : "音声エンジン起動後") 予約解放=\(releaseReservationsBeforeInstall)")
+        try await t.installAssets(locale: Locale(identifier: sttLocaleID),
+                                  engine: sttEngine,
+                                  releaseReservations: releaseReservationsBeforeInstall) { [weak self] fraction, stage in
+            Task { @MainActor in
+                guard let self else { return }
+                let percent = Int(fraction * 100)
+                // 段階が変わった時、または10%刻みで進んだ時だけログに出す
+                // （毎300msそのまま出すとログが埋まってしまうため）
+                if stage != self.lastLoggedSTTStage
+                    || percent / 10 != self.lastLoggedSTTProgress / 10
+                    || percent == 100 {
+                    self.lastLoggedSTTStage = stage
+                    self.lastLoggedSTTProgress = percent
+                    self.add("STT: \(stage) (\(percent)%)")
+                }
+            }
         }
     }
 
@@ -207,6 +245,7 @@ final class VoiceLoop {
 
     private func apply(_ u: Transcriber.Update) {
         if u.isFinal {
+            add("認識(確定): \(u.text)")
             // volatile は「置換」。追記すると単語が重複する。
             finalizedText += (finalizedText.isEmpty ? "" : " ") + u.text
             volatileText = ""
@@ -215,6 +254,42 @@ final class VoiceLoop {
             }
         } else {
             volatileText = u.text
+        }
+    }
+
+    // MARK: - STT 自己診断
+
+    /// Kokoro で合成した英語音声を、マイクとは別の Transcriber に直接流して
+    /// 文字起こし結果を確認する。マイクや端末の置き場所に左右されない
+    /// 決定論的な確認用。listening 状態（Kokoro ロード済み）で呼ぶこと。
+    func runSTTSelfTest() async {
+        let text = "Hello. I would like to practice my English conversation today."
+        add("── STT 自己診断: engine=\(sttEngine.rawValue) locale=\(sttLocaleID) ──")
+        add("入力テキスト: \(text)")
+        do {
+            let samples = try await tts.synthesize(text)
+            guard let fmt = AVAudioFormat(standardFormatWithSampleRate: 24_000, channels: 1),
+                  let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(samples.count)),
+                  let dst = buf.floatChannelData?[0]
+            else { return }
+            buf.frameLength = AVAudioFrameCount(samples.count)
+            samples.withUnsafeBufferPointer { dst.update(from: $0.baseAddress!, count: samples.count) }
+
+            let t = Transcriber()
+            try await t.installAssets(locale: Locale(identifier: sttLocaleID), engine: sttEngine,
+                                      releaseReservations: false)
+            try await t.prepare(naturalFormat: fmt)
+            let updates = try await t.start()
+            await t.feed(buf)
+            let collector = Task {
+                var finals: [String] = []
+                for await u in updates where u.isFinal { finals.append(u.text) }
+                return finals.joined(separator: " ")
+            }
+            await t.finish()
+            add("自己診断 認識結果: \(await collector.value)")
+        } catch {
+            add("自己診断 失敗: \(error.localizedDescription)")
         }
     }
 

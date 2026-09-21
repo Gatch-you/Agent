@@ -9,7 +9,7 @@
 |---|---|---|
 | 1 | **AEC（エコーキャンセル）が効くか** | ✅ **確認済み(2026-09-21)**。barge-in が実際の会話ループ中に繰り返し検出された |
 | 2 | **barge-in が成立するか** | ✅ **確認済み(2026-09-21)**。項目1と同時に確認 |
-| 3 | SpeechAnalyzer がマイク入力で動くか | ❌ **不採用が確定**。日本リージョンの実機(iPhone 16e / iOS 26.6)で英語ロケール(en-US・en-GB)のモデル資産インストールが無期限にハング。日本語(ja-JP)は同一コードで正常動作するため、コードの不具合ではなく地域制限と判断。**STT は Deepgram（クラウド・ストリーミング）に変更**（設計書 §13）。詳しい切り分け経緯も §13 参照 |
+| 3 | SpeechAnalyzer がマイク入力で動くか | ✅ **決定・確認済み**。`SpeechTranscriber`(新API)は不採用、`DictationTranscriber`(旧API系統)を採用。当初「日本リージョンで英語が使えない」と結論したが誤りで、正しくは「端末に未インストールのロケールは新規ダウンロードが進まない」不具合(言語・地域とは無関係)。fr-FR で追試したところ`DictationTranscriber`でも同じ新規ダウンロード不具合を確認したため、この不具合自体は解決していない。ただし本アプリは個人利用限定であり、使用する端末(この iPhone)には英語(en-US)アセットが既にインストール済みであることを実機確認済み(自己診断・実際のマイク入力の両方で認識成功)なので、この制約は個人利用のスコープでは問題にならない。**結論：STTは`DictationTranscriber`(オンデバイス・無料)を採用、Deepgram等クラウドSTTは不要**(設計書 §13) |
 | 4 | **Kokoro の実機 RTF・メモリ・ウォームアップ** | 会話ループ中の応答性は良好と定性的に確認済み。RTF・ピークメモリ・ウォームアップの具体的な数値はアプリの「計測」表示から別途記録が必要 |
 
 **LLM は繋いでいない。** ここで潰したいリスクは音声の往復であって応答生成ではないため、
@@ -131,7 +131,7 @@ kokoro_tts_listening_test.ipynb Kokoro 試聴テスト（検証ステップ1）�
 Sources/
   App.swift                    SwiftUI の画面。状態・計測値・ログを表示
   AudioEngineHost.swift         AVAudioSession / AVAudioEngine / AEC / RMS 計測 / 再生
-  Transcriber.swift             SpeechAnalyzer + SpeechTranscriber ラッパー（英語は日本リージョンで動作せず、ja-JPで代用中。設計書§13参照）
+  Transcriber.swift             SpeechAnalyzer(SpeechTranscriber/DictationTranscriber両対応)ラッパー。採用は DictationTranscriber。設計書§13参照
   TtsEngine.swift               Kokoro 呼び出しとベンチ計測
   VoiceLoop.swift               状態機械・barge-in 判定・AEC テスト
   FoundationModelsCheck.swift   FoundationModels が英語テキストで使えるかの起動時チェック（確認済み・問題なし）

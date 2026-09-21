@@ -37,6 +37,31 @@ struct ContentView: View {
             let result = await FoundationModelsCheck.run()
             print(result)
         }
+        .task {
+            // 画面操作なしで Mac から切り分けを回すための起動引数。
+            // 例: devicectl ... launch --console <bundle id> -- -sttLocale fr-FR -installBeforeAudio YES -legacyProbe YES -autoStart YES
+            let d = UserDefaults.standard
+            if let id = d.string(forKey: "sttLocale") { loop.sttLocaleID = id }
+            if d.object(forKey: "installBeforeAudio") != nil {
+                loop.installAssetsBeforeAudio = d.bool(forKey: "installBeforeAudio")
+            }
+            if d.object(forKey: "releaseReservations") != nil {
+                loop.releaseReservationsBeforeInstall = d.bool(forKey: "releaseReservations")
+            }
+            if d.object(forKey: "legacyProbe") != nil {
+                loop.probeLegacyOnDevice = d.bool(forKey: "legacyProbe")
+            }
+            if let e = d.string(forKey: "sttEngine").flatMap(Transcriber.Engine.init(rawValue:)) {
+                loop.sttEngine = e
+            }
+            if d.object(forKey: "transcribeOnly") != nil {
+                loop.transcribeOnly = d.bool(forKey: "transcribeOnly")
+            }
+            if d.bool(forKey: "autoStart") { await loop.startSession() }
+            if d.bool(forKey: "sttSelfTest"), loop.state == .listening {
+                await loop.runSTTSelfTest()
+            }
+        }
     }
 
     // MARK: -
@@ -92,6 +117,44 @@ struct ContentView: View {
                 Text("文字起こしのみ（応答を挟まず全部テキスト化）")
                     .font(.caption)
             }
+
+            sttDiagnostics
+        }
+    }
+
+    /// en-US のアセットインストールが固まる原因の切り分け用。
+    /// セッション開始前に設定する（開始後の変更は次回の開始から効く）。
+    private var sttDiagnostics: some View {
+        GroupBox("STT 切り分け") {
+            VStack(alignment: .leading, spacing: 8) {
+                Picker("エンジン", selection: Binding(
+                    get: { loop.sttEngine },
+                    set: { loop.sttEngine = $0 }
+                )) {
+                    Text("SpeechTranscriber").tag(Transcriber.Engine.speech)
+                    Text("DictationTranscriber").tag(Transcriber.Engine.dictation)
+                }
+                .pickerStyle(.segmented)
+
+                Picker("ロケール", selection: Binding(
+                    get: { loop.sttLocaleID },
+                    set: { loop.sttLocaleID = $0 }
+                )) {
+                    ForEach(["en-US", "en-GB", "ja-JP", "fr-FR", "de-DE", "ko-KR"], id: \.self) {
+                        Text($0).tag($0)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Toggle(isOn: Binding(
+                    get: { loop.installAssetsBeforeAudio },
+                    set: { loop.installAssetsBeforeAudio = $0 }
+                )) {
+                    Text("音声エンジン起動前にアセットをインストール")
+                        .font(.caption)
+                }
+            }
+            .disabled(loop.state != .idle && loop.state != .failed)
         }
     }
 
