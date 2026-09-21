@@ -5,12 +5,12 @@
 
 ## これで何を確かめるのか
 
-| # | 検証項目 | 失敗したときの意味 |
+| # | 検証項目 | 結果 |
 |---|---|---|
-| 1 | **AEC（エコーキャンセル）が効くか** | barge-in が実装できない → 構成の見直しが必要 |
-| 2 | **barge-in が成立するか** | 会話体験として成立しない |
-| 3 | SpeechAnalyzer がマイク入力で動くか | STT をクラウドに戻す判断が必要 |
-| 4 | **Kokoro の実機 RTF・メモリ・ウォームアップ** | 採用自体は試聴テスト合格により確定済み（`kokoro_tts_listening_test.ipynb`、設計書 §09）。ここで数値が想定を大きく外れた場合のみクラウド TTS 継続を再検討 |
+| 1 | **AEC（エコーキャンセル）が効くか** | ✅ **確認済み(2026-09-21)**。barge-in が実際の会話ループ中に繰り返し検出された |
+| 2 | **barge-in が成立するか** | ✅ **確認済み(2026-09-21)**。項目1と同時に確認 |
+| 3 | SpeechAnalyzer がマイク入力で動くか | ❌ **不採用が確定**。日本リージョンの実機(iPhone 16e / iOS 26.6)で英語ロケール(en-US・en-GB)のモデル資産インストールが無期限にハング。日本語(ja-JP)は同一コードで正常動作するため、コードの不具合ではなく地域制限と判断。**STT は Deepgram（クラウド・ストリーミング）に変更**（設計書 §13）。詳しい切り分け経緯も §13 参照 |
+| 4 | **Kokoro の実機 RTF・メモリ・ウォームアップ** | 会話ループ中の応答性は良好と定性的に確認済み。RTF・ピークメモリ・ウォームアップの具体的な数値はアプリの「計測」表示から別途記録が必要 |
 
 **LLM は繋いでいない。** ここで潰したいリスクは音声の往復であって応答生成ではないため、
 `thinking` は定型応答で代替してある。検証を決定論的にするための意図的な設計。
@@ -129,11 +129,12 @@ soniqo/speech-swift の公式ドキュメントに記載がある通り、
 voice-agent-architecture.html   設計書本体（§01〜§14。このREADMEが参照する「設計書」）
 kokoro_tts_listening_test.ipynb Kokoro 試聴テスト（検証ステップ1）。合格・採用確定済み
 Sources/
-  App.swift              SwiftUI の画面。状態・計測値・ログを表示
-  AudioEngineHost.swift   AVAudioSession / AVAudioEngine / AEC / RMS 計測 / 再生
-  Transcriber.swift       SpeechAnalyzer + SpeechTranscriber ラッパー
-  TtsEngine.swift         Kokoro 呼び出しとベンチ計測
-  VoiceLoop.swift         状態機械・barge-in 判定・AEC テスト
+  App.swift                    SwiftUI の画面。状態・計測値・ログを表示
+  AudioEngineHost.swift         AVAudioSession / AVAudioEngine / AEC / RMS 計測 / 再生
+  Transcriber.swift             SpeechAnalyzer + SpeechTranscriber ラッパー（英語は日本リージョンで動作せず、ja-JPで代用中。設計書§13参照）
+  TtsEngine.swift               Kokoro 呼び出しとベンチ計測
+  VoiceLoop.swift               状態機械・barge-in 判定・AEC テスト
+  FoundationModelsCheck.swift   FoundationModels が英語テキストで使えるかの起動時チェック（確認済み・問題なし）
 Resources/
   KokoroModel/           Kokoro-82M の重み一式（約318MB、同梱・オフラインロード用）
 ```

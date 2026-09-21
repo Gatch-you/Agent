@@ -12,6 +12,7 @@
 		5A11DD672CA9C881BFC2B9F2 /* AudioCommon in Frameworks */ = {isa = PBXBuildFile; productRef = 1E20E69F52EA3964046DBDBD /* AudioCommon */; };
 		608A63AD12429AE2823143E5 /* KokoroTTS in Frameworks */ = {isa = PBXBuildFile; productRef = B59631E4D9120A81924D7901 /* KokoroTTS */; };
 		9933E46D04518C3E0A08834F /* KokoroModel in Resources */ = {isa = PBXBuildFile; fileRef = A2DC6E14B37B4EBE36182567 /* KokoroModel */; };
+		9B8C5FA12A6A7C7C5591161A /* FoundationModelsCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = E45863EC70CC5AC39F407620 /* FoundationModelsCheck.swift */; };
 		D9BB873ADF968CA67C97DCC9 /* TtsEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E3A9BBAEA62A891DC6CC492 /* TtsEngine.swift */; };
 		E9B3665D71EA9F87E07C99AE /* AudioEngineHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = CE48B6512E2E8CE45F4CA1F0 /* AudioEngineHost.swift */; };
 		FE636D2827EE2EA0B618C116 /* Transcriber.swift in Sources */ = {isa = PBXBuildFile; fileRef = 53FBC326592071E92F9B62EC /* Transcriber.swift */; };
@@ -25,6 +26,7 @@
 		902D23C8C8F266B01A1EE944 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
 		A2DC6E14B37B4EBE36182567 /* KokoroModel */ = {isa = PBXFileReference; lastKnownFileType = folder; name = KokoroModel; path = Resources/KokoroModel; sourceTree = SOURCE_ROOT; };
 		CE48B6512E2E8CE45F4CA1F0 /* AudioEngineHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEngineHost.swift; sourceTree = "<group>"; };
+		E45863EC70CC5AC39F407620 /* FoundationModelsCheck.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FoundationModelsCheck.swift; sourceTree = "<group>"; };
 		F2009EA0343C414304DA7148 /* VoiceLoop.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceLoop.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -46,6 +48,7 @@
 			children = (
 				902D23C8C8F266B01A1EE944 /* App.swift */,
 				CE48B6512E2E8CE45F4CA1F0 /* AudioEngineHost.swift */,
+				E45863EC70CC5AC39F407620 /* FoundationModelsCheck.swift */,
 				29BC311A983BEE084ACC0502 /* Info.plist */,
 				53FBC326592071E92F9B62EC /* Transcriber.swift */,
 				7E3A9BBAEA62A891DC6CC492 /* TtsEngine.swift */,
@@ -158,6 +161,7 @@
 			files = (
 				02F63FD0871F2BD7406F903E /* App.swift in Sources */,
 				E9B3665D71EA9F87E07C99AE /* AudioEngineHost.swift in Sources */,
+				9B8C5FA12A6A7C7C5591161A /* FoundationModelsCheck.swift in Sources */,
 				FE636D2827EE2EA0B618C116 /* Transcriber.swift in Sources */,
 				D9BB873ADF968CA67C97DCC9 /* TtsEngine.swift in Sources */,
 				4B2B74AEC74E5BE1FF360239 /* VoiceLoop.swift in Sources */,

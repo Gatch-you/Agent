@@ -31,6 +31,12 @@ struct ContentView: View {
             }
             .navigationTitle("Voice Loop Lab")
         }
+        .task {
+            // VoiceLoop（音声ループ）とは無関係に、起動時に一度だけ
+            // FoundationModels が英語テキストで使えるかを確認する。
+            let result = await FoundationModelsCheck.run()
+            print(result)
+        }
     }
 
     // MARK: -
@@ -78,6 +84,14 @@ struct ContentView: View {
             }
             .buttonStyle(.bordered)
             .disabled(loop.state != .listening)
+
+            Toggle(isOn: Binding(
+                get: { loop.transcribeOnly },
+                set: { loop.transcribeOnly = $0 }
+            )) {
+                Text("文字起こしのみ（応答を挟まず全部テキスト化）")
+                    .font(.caption)
+            }
         }
     }
 

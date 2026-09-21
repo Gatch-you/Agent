@@ -56,11 +56,15 @@ actor Transcriber {
             throw TranscriberError.unsupportedLocale
         }
 
+        // ハングの原因は preset ではなくロケール（地域制限）だったと判明したため、
+        // リアルタイム性を優先する .progressiveTranscription に戻す。
         let t = SpeechTranscriber(locale: supported, preset: .progressiveTranscription)
 
         let preStatus = await AssetInventory.status(forModules: [t])
         let reserved = await AssetInventory.reservedLocales
-        onProgress?(0, "事前状態: status=\(preStatus) reservedLocales=\(reserved.map(\.identifier))")
+        let installedLocales = await Set(SpeechTranscriber.installedLocales)
+        let alreadyInstalled = installedLocales.map(\.identifier).contains(supported.identifier)
+        onProgress?(0, "事前状態: status=\(preStatus) reservedLocales=\(reserved.map(\.identifier)) installed=\(alreadyInstalled)")
 
         // 既存の予約が壊れている/中途半端な可能性を疑い、一度解放してから
         // インストール要求をやり直す。release は失敗しても無視してよい

@@ -31,6 +31,11 @@ final class VoiceLoop {
     private(set) var log: [String] = []
     private(set) var errorMessage: String?
 
+    /// true の間は確定テキストが出ても定型応答（TTS再生）を挟まない。
+    /// 連続して話した内容がすべて文字起こしされるかだけを、
+    /// 会話ループに邪魔されず確認するためのモード。
+    var transcribeOnly = false
+
     // 計測値
     private(set) var inputFormatDescription = "—"
     private(set) var voiceProcessingEnabled = false
@@ -84,9 +89,18 @@ final class VoiceLoop {
             add("Voice Processing: \(voiceProcessingEnabled ? "有効" : "無効")")
             add("入力フォーマット: \(inputFormatDescription)")
 
+            // AVAudioEngine 起動 → 実際のマイクフォーマットが確定してから
+            // SpeechAnalyzer を準備する（naturalFormat にマイクの実フォーマットを
+            // 渡すことで、変換なし/最小限で済むフォーマットを選ばせる）。
+            // 起動順序を先に入れ替える実験をしたが、それは元のハング（地域制限）
+            // の原因ではなく、naturalFormat を nil にした副作用で認識が全く
+            // 動かなくなっていたので元に戻した。
             add("SpeechAnalyzer 準備中…（初回は音声認識モデルのDLで時間がかかる）")
             let t = Transcriber()
-            try await t.prepare(naturalFormat: host.inputFormat) { [weak self] fraction, stage in
+            // en-US/en-GB は日本リージョンの実機でハングすることを確認済み
+            // （設計書 §13）。Kokoro の実機性能測定を続けるため、動作確認済みの
+            // ja-JP を暫定で使う。本番の英語認識は Deepgram（クラウド）へ移行する。
+            try await t.prepare(locale: Locale(identifier: "ja-JP"), naturalFormat: host.inputFormat) { [weak self] fraction, stage in
                 Task { @MainActor in
                     guard let self else { return }
                     let percent = Int(fraction * 100)
@@ -196,7 +210,7 @@ final class VoiceLoop {
             // volatile は「置換」。追記すると単語が重複する。
             finalizedText += (finalizedText.isEmpty ? "" : " ") + u.text
             volatileText = ""
-            if state == .listening, !u.text.trimmingCharacters(in: .whitespaces).isEmpty {
+            if !transcribeOnly, state == .listening, !u.text.trimmingCharacters(in: .whitespaces).isEmpty {
                 Task { await respond() }
             }
         } else {
