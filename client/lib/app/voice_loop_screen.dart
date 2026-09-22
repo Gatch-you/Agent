@@ -1,15 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../domain/voice_loop_state.dart';
 import '../ports/stt_port.dart';
 import '../ports/tts_port.dart';
+import 'theme/voice_loop_tokens.dart';
+import 'widgets/ambient_glow.dart';
+import 'widgets/message_bubble.dart';
+import 'widgets/voice_mic_button.dart';
 
-/// Walking-skeleton voice loop screen (.claude/specs/voice-loop-walking-skeleton.md).
-///
-/// Speaks back whatever it hears (no LLM yet) so both the STT input and the
-/// TTS output are visible in one place: live transcript while listening,
-/// final transcript once recognized, and a phase indicator while it echoes
-/// the reply back.
+/// The real conversation screen (`.claude/specs/conversation-screen-visual-design.md`),
+/// reproducing `design/conversation.html`. Speaks back whatever it hears (no
+/// LLM yet — see `ReplyReady` in `voice_loop_state.dart`) so both the STT
+/// input and the TTS output are visible: a scrolling chat history, a live
+/// transcript while listening, and an animated mic button through
+/// idle/listening/thinking/speaking.
 class VoiceLoopScreen extends StatefulWidget {
   const VoiceLoopScreen({super.key, required this.stt, required this.tts});
 
@@ -23,6 +29,12 @@ class VoiceLoopScreen extends StatefulWidget {
 class _VoiceLoopScreenState extends State<VoiceLoopScreen> {
   VoiceLoopState _state = const VoiceLoopState();
   bool? _sttAvailable;
+  int? _playingMessageIndex;
+
+  final _scrollController = ScrollController();
+  final _sessionStart = DateTime.now();
+  late final Timer _sessionTimer;
+  Duration _sessionElapsed = Duration.zero;
 
   @override
   void initState() {
@@ -31,20 +43,30 @@ class _VoiceLoopScreenState extends State<VoiceLoopScreen> {
       if (!mounted) return;
       setState(() => _sttAvailable = available);
     });
+    _sessionTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _sessionElapsed = DateTime.now().difference(_sessionStart));
+    });
   }
 
   @override
   void dispose() {
+    _sessionTimer.cancel();
+    _scrollController.dispose();
     widget.stt.dispose();
     widget.tts.dispose();
     super.dispose();
   }
 
   void _onMicPressed() {
-    if (_state.phase == VoiceLoopPhase.idle) {
-      _start();
-    } else {
-      _stop();
+    switch (_state.phase) {
+      case VoiceLoopPhase.idle:
+        _start();
+      case VoiceLoopPhase.listening:
+      case VoiceLoopPhase.speaking:
+        _stop();
+      case VoiceLoopPhase.thinking:
+        break; // no-op: mic is disabled while thinking, mirroring the mockup.
     }
   }
 
@@ -63,6 +85,7 @@ class _VoiceLoopScreenState extends State<VoiceLoopScreen> {
       onPartialResult: (text) {
         if (!mounted) return;
         setState(() => _state = _state.reduce(PartialResult(text)));
+        _scrollToBottom();
       },
       onFinalResult: (text) async {
         if (!mounted) return;
@@ -71,15 +94,28 @@ class _VoiceLoopScreenState extends State<VoiceLoopScreen> {
         // (e.g. DictationTranscriberStt's silence-timeout synthetic final,
         // followed by the real one once finalizeAndFinishThroughEndOfInput()
         // actually completes). Checking only the resulting phase isn't
-        // enough — once already `speaking`, a second final would still see
-        // phase == speaking and re-trigger stopListening()/speak(), which
-        // crashed the native Speech framework by tearing it down twice.
+        // enough — once already past `listening`, a second final would still
+        // see a non-`listening` phase and re-trigger this whole turn (this
+        // exact double-trigger crashed the native Speech framework once by
+        // tearing its session down twice — see DictationTranscriberBridge.swift).
         final wasListening = _state.phase == VoiceLoopPhase.listening;
         setState(() => _state = _state.reduce(FinalResult(text)));
-        if (!wasListening || _state.phase != VoiceLoopPhase.speaking) return;
+        if (!wasListening || _state.phase != VoiceLoopPhase.thinking) return;
+        _scrollToBottom();
 
-        final reply = _state.finalTranscript;
+        final userText = _state.messages.last.text;
         await widget.stt.stopListening();
+
+        // Stand-in for real LLM latency — there's no CascadeSession/LlmPort
+        // yet (see .claude/specs/conversation-screen-visual-design.md), so
+        // this is just a short fixed beat before echoing the reply back.
+        await Future.delayed(const Duration(milliseconds: 600));
+        if (!mounted) return;
+        setState(() => _state = _state.reduce(ReplyReady(userText)));
+        if (_state.phase != VoiceLoopPhase.speaking) return;
+        _scrollToBottom();
+
+        final reply = _state.messages.last.text;
         await widget.tts.speak(
           reply,
           onComplete: () {
@@ -94,72 +130,270 @@ class _VoiceLoopScreenState extends State<VoiceLoopScreen> {
     );
   }
 
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 200),
+        curve: voiceLoopEaseStandard,
+      );
+    });
+  }
+
+  /// Replays TTS for one assistant message. Only one plays at a time.
+  /// [TtsPort] has no `stop()` (out of scope to add here — see the spec), so
+  /// tapping a different bubble while one is already playing is ignored
+  /// rather than risking two overlapping/queued utterances; tapping the
+  /// currently-playing bubble again just clears the visual indicator.
+  void _toggleMessagePlayback(int index, String text) {
+    if (_playingMessageIndex == index) {
+      setState(() => _playingMessageIndex = null);
+      return;
+    }
+    if (_playingMessageIndex != null) return;
+
+    setState(() => _playingMessageIndex = index);
+    widget.tts.speak(
+      text,
+      onComplete: () {
+        if (!mounted || _playingMessageIndex != index) return;
+        setState(() => _playingMessageIndex = null);
+      },
+    );
+  }
+
+  String get _stateLabel => switch (_state.phase) {
+    VoiceLoopPhase.idle => 'Tap to start',
+    VoiceLoopPhase.listening => 'Listening…',
+    VoiceLoopPhase.thinking => 'Thinking…',
+    VoiceLoopPhase.speaking => 'Speaking…',
+  };
+
+  Color get _stateDotColor => switch (_state.phase) {
+    VoiceLoopPhase.idle => VoiceLoopColors.labelTertiary,
+    VoiceLoopPhase.listening => VoiceLoopColors.accent,
+    VoiceLoopPhase.thinking => VoiceLoopColors.labelTertiary,
+    VoiceLoopPhase.speaking => VoiceLoopColors.danger,
+  };
+
+  String get _sessionLabel {
+    final m = _sessionElapsed.inMinutes.toString().padLeft(2, '0');
+    final s = (_sessionElapsed.inSeconds % 60).toString().padLeft(2, '0');
+    return 'Session · $m:$s';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Voice loop (walking skeleton)')),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _PhaseBadge(phase: _state.phase),
-            const SizedBox(height: 24),
-            const Text('Live (STT input)', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text(
-              _state.liveTranscript.isEmpty ? '—' : _state.liveTranscript,
-              style: const TextStyle(fontSize: 16, color: Colors.grey),
+      backgroundColor: VoiceLoopColors.bgGrouped,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: AmbientGlow(
+              intensified:
+                  _state.phase == VoiceLoopPhase.listening ||
+                  _state.phase == VoiceLoopPhase.speaking,
             ),
-            const SizedBox(height: 24),
-            const Text('Final (TTS output)', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text(
-              _state.finalTranscript.isEmpty ? '—' : _state.finalTranscript,
-              style: const TextStyle(fontSize: 16),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                _NavBar(subtitle: _sessionLabel),
+                Expanded(child: _buildMessageList()),
+                _buildLiveTranscript(),
+                _buildControlArea(),
+              ],
             ),
-            if (_sttAvailable == false) ...[
-              const SizedBox(height: 24),
-              const Text(
-                'Speech recognition is not available on this device.',
-                style: TextStyle(color: Colors.red),
-              ),
-            ],
-          ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMessageList() {
+    final showThinking = _state.phase == VoiceLoopPhase.thinking;
+    final itemCount = _state.messages.length + (showThinking ? 1 : 0);
+
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.symmetric(
+        horizontal: VoiceLoopSpacing.lg,
+        vertical: VoiceLoopSpacing.sm,
+      ),
+      itemCount: itemCount,
+      itemBuilder: (context, index) {
+        if (showThinking && index == _state.messages.length) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: VoiceLoopSpacing.xs / 2),
+            child: ThinkingBubble(),
+          );
+        }
+        final message = _state.messages[index];
+        return MessageBubble(
+          key: ValueKey('message-$index'),
+          message: message,
+          isPlaying: _playingMessageIndex == index,
+          onTogglePlay: message.role == MessageRole.assistant
+              ? () => _toggleMessagePlayback(index, message.text)
+              : null,
+        );
+      },
+    );
+  }
+
+  Widget _buildLiveTranscript() {
+    final hasText = _state.liveTranscript.isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        VoiceLoopSpacing.xl,
+        0,
+        VoiceLoopSpacing.xl,
+        VoiceLoopSpacing.xs,
+      ),
+      child: SizedBox(
+        height: 22,
+        child: hasText
+            ? Align(
+                alignment: Alignment.centerRight,
+                child: _BlinkingCaretText(text: _state.liveTranscript),
+              )
+            : null,
+      ),
+    );
+  }
+
+  Widget _buildControlArea() {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(0, VoiceLoopSpacing.sm, 0, VoiceLoopSpacing.lg),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.bottomCenter,
+          end: Alignment.topCenter,
+          colors: [Color(0x8C000000), Color(0x00000000)],
+          stops: [0, 0.55],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
-        // Only enabled once initialize() has resolved to true. While
-        // `_sttAvailable` is still null (initializing) or false
-        // (unavailable), pressing this would otherwise hit the plugin
-        // before it's ready and throw SpeechToTextNotInitializedException.
-        onPressed: _sttAvailable == true ? _onMicPressed : null,
-        tooltip: _state.phase == VoiceLoopPhase.idle ? 'Start' : 'Stop',
-        child: Icon(_state.phase == VoiceLoopPhase.idle ? Icons.mic : Icons.stop),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                margin: const EdgeInsets.only(right: 6),
+                decoration: BoxDecoration(shape: BoxShape.circle, color: _stateDotColor),
+              ),
+              Text(_stateLabel, style: VoiceLoopTextStyles.footnote),
+            ],
+          ),
+          const SizedBox(height: VoiceLoopSpacing.sm),
+          VoiceMicButton(
+            phase: _state.phase,
+            onPressed: (_sttAvailable == true && _state.phase != VoiceLoopPhase.thinking)
+                ? _onMicPressed
+                : null,
+          ),
+          const SizedBox(height: VoiceLoopSpacing.sm),
+          Text(
+            _sttAvailable == false
+                ? 'Speech recognition is not available on this device.'
+                : 'Tap the mic and start speaking',
+            style: VoiceLoopTextStyles.caption,
+          ),
+        ],
       ),
     );
   }
 }
 
-class _PhaseBadge extends StatelessWidget {
-  const _PhaseBadge({required this.phase});
+class _NavBar extends StatelessWidget {
+  const _NavBar({required this.subtitle});
 
-  final VoiceLoopPhase phase;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
-    final (label, color) = switch (phase) {
-      VoiceLoopPhase.idle => ('idle', Colors.grey),
-      VoiceLoopPhase.listening => ('listening', Colors.green),
-      VoiceLoopPhase.speaking => ('speaking', Colors.blue),
-    };
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(color: color.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(999)),
-        child: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        VoiceLoopSpacing.lg,
+        VoiceLoopSpacing.xs,
+        VoiceLoopSpacing.lg,
+        VoiceLoopSpacing.md,
       ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('English Practice', style: VoiceLoopTextStyles.headline),
+              Text(subtitle, style: VoiceLoopTextStyles.caption),
+            ],
+          ),
+          // History screen isn't built yet (see the spec's Out of scope) —
+          // this stays a plain, always-enabled-looking icon with no handler,
+          // matching the mockup's own inert button.
+          Container(
+            width: 32,
+            height: 32,
+            decoration: const BoxDecoration(color: Color(0x1F787880), shape: BoxShape.circle),
+            child: const Icon(Icons.history_rounded, size: 16, color: VoiceLoopColors.accent),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BlinkingCaretText extends StatefulWidget {
+  const _BlinkingCaretText({required this.text});
+
+  final String text;
+
+  @override
+  State<_BlinkingCaretText> createState() => _BlinkingCaretTextState();
+}
+
+class _BlinkingCaretTextState extends State<_BlinkingCaretText> with SingleTickerProviderStateMixin {
+  late final _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 1),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Flexible(
+          child: Text(
+            widget.text,
+            textAlign: TextAlign.right,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+            style: VoiceLoopTextStyles.subhead.copyWith(fontStyle: FontStyle.italic),
+          ),
+        ),
+        const SizedBox(width: 2),
+        AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) {
+            return Opacity(
+              opacity: _controller.value < 0.5 ? 1 : 0,
+              child: Container(width: 2, height: 15, color: VoiceLoopColors.labelSecondary),
+            );
+          },
+        ),
+      ],
     );
   }
 }

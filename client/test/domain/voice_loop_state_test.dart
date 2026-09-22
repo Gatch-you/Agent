@@ -21,7 +21,7 @@ void main() {
     });
 
     test(
-      'listening + non-empty finalResult -> speaking, finalTranscript set, liveTranscript cleared',
+      'listening + non-empty finalResult -> thinking, user message appended, liveTranscript cleared',
       () {
         const state = VoiceLoopState(
           phase: VoiceLoopPhase.listening,
@@ -30,26 +30,54 @@ void main() {
 
         final next = state.reduce(const FinalResult('hello world'));
 
-        expect(next.phase, VoiceLoopPhase.speaking);
-        expect(next.finalTranscript, 'hello world');
+        expect(next.phase, VoiceLoopPhase.thinking);
         expect(next.liveTranscript, '');
+        expect(next.messages, [
+          const VoiceLoopMessage(role: MessageRole.user, text: 'hello world'),
+        ]);
       },
     );
 
     test(
-      'listening + empty/whitespace finalResult -> stays listening, finalTranscript unchanged',
+      'listening + empty/whitespace finalResult -> stays listening, messages unchanged',
       () {
         const state = VoiceLoopState(
           phase: VoiceLoopPhase.listening,
-          finalTranscript: 'previous',
+          messages: [VoiceLoopMessage(role: MessageRole.assistant, text: 'previous')],
         );
 
         final next = state.reduce(const FinalResult('   '));
 
         expect(next.phase, VoiceLoopPhase.listening);
-        expect(next.finalTranscript, 'previous');
+        expect(next.messages, state.messages);
       },
     );
+
+    test(
+      'thinking + replyReady -> speaking, assistant message appended after existing ones',
+      () {
+        const state = VoiceLoopState(
+          phase: VoiceLoopPhase.thinking,
+          messages: [VoiceLoopMessage(role: MessageRole.user, text: 'hello world')],
+        );
+
+        final next = state.reduce(const ReplyReady('hi there'));
+
+        expect(next.phase, VoiceLoopPhase.speaking);
+        expect(next.messages, const [
+          VoiceLoopMessage(role: MessageRole.user, text: 'hello world'),
+          VoiceLoopMessage(role: MessageRole.assistant, text: 'hi there'),
+        ]);
+      },
+    );
+
+    test('thinking + startRequested -> no-op, already active', () {
+      const state = VoiceLoopState(phase: VoiceLoopPhase.thinking);
+
+      final next = state.reduce(const StartRequested());
+
+      expect(next.phase, VoiceLoopPhase.thinking);
+    });
 
     test('speaking + ttsFinished -> listening', () {
       const state = VoiceLoopState(phase: VoiceLoopPhase.speaking);
@@ -59,19 +87,22 @@ void main() {
       expect(next.phase, VoiceLoopPhase.listening);
     });
 
-    test('any state + stopRequested -> idle, transcripts cleared', () {
-      const state = VoiceLoopState(
-        phase: VoiceLoopPhase.speaking,
-        liveTranscript: 'live',
-        finalTranscript: 'final',
-      );
+    test(
+      'any state + stopRequested -> idle, liveTranscript cleared, messages preserved',
+      () {
+        const state = VoiceLoopState(
+          phase: VoiceLoopPhase.speaking,
+          liveTranscript: 'live',
+          messages: [VoiceLoopMessage(role: MessageRole.user, text: 'hello world')],
+        );
 
-      final next = state.reduce(const StopRequested());
+        final next = state.reduce(const StopRequested());
 
-      expect(next.phase, VoiceLoopPhase.idle);
-      expect(next.liveTranscript, '');
-      expect(next.finalTranscript, '');
-    });
+        expect(next.phase, VoiceLoopPhase.idle);
+        expect(next.liveTranscript, '');
+        expect(next.messages, state.messages);
+      },
+    );
 
     test('idle + stopRequested -> no-op, stays idle', () {
       const state = VoiceLoopState();
