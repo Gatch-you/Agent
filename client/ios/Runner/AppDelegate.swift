@@ -4,8 +4,7 @@ import UIKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
-  private let synthesizer = AVSpeechSynthesizer()
-  private var speechDelegate: SpeechSynthesizerDelegate?
+  private let kokoroBridge = KokoroTtsBridge()
 
   // Type-erased so this property can exist on a class that must support
   // pre-iOS-26 deployment targets; DictationTranscriberBridge itself
@@ -26,30 +25,30 @@ import UIKit
       name: "voice_loop/tts",
       binaryMessenger: engineBridge.applicationRegistrar.messenger())
 
-    let delegate = SpeechSynthesizerDelegate(channel: ttsChannel)
-    synthesizer.delegate = delegate
-    self.speechDelegate = delegate
-
     ttsChannel.setMethodCallHandler { [weak self] call, result in
       guard let self else { return }
       switch call.method {
       case "speak":
         let text = (call.arguments as? [String: Any])?["text"] as? String ?? ""
-        // No category switch here on purpose: DictationTranscriberBridge's
-        // STT session runs continuously for the whole conversation (see its
-        // type doc) on .playAndRecord, which already supports simultaneous
-        // playback. Switching to .playback here would have disrupted that
-        // already-running engine. This relies on STT having started at least
-        // once before the first reply is spoken, which the app's flow (STT
-        // always runs first; TTS only ever replies to a recognized turn)
-        // guarantees.
-        let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-        print("[TTS] speak: \"\(text)\" category=\(AVAudioSession.sharedInstance().category.rawValue) isSpeaking=\(self.synthesizer.isSpeaking)")
-        self.synthesizer.speak(utterance)
+        Task {
+          // No AVAudioSession category switch here on purpose:
+          // DictationTranscriberBridge's STT session runs continuously for
+          // the whole conversation (see its type doc) on .playAndRecord,
+          // which already supports simultaneous playback — KokoroTtsBridge
+          // just renders into that already-active session. This relies on
+          // STT having started at least once before the first reply is
+          // spoken, which the app's flow (STT always runs first; TTS only
+          // ever replies to a recognized turn) guarantees.
+          do {
+            try await self.kokoroBridge.speak(text)
+          } catch {
+            print("[TTS] Kokoro speak failed: \(error)")
+          }
+          ttsChannel.invokeMethod("onComplete", arguments: nil)
+        }
         result(nil)
       case "stop":
-        self.synthesizer.stopSpeaking(at: .immediate)
+        Task { await self.kokoroBridge.stop() }
         result(nil)
       default:
         result(FlutterMethodNotImplemented)
@@ -115,32 +114,5 @@ import UIKit
         result(FlutterMethodNotImplemented)
       }
     }
-  }
-}
-
-/// Bridges `AVSpeechSynthesizer`'s completion callback back to Dart. This is
-/// the walking-skeleton TTS bridge (`.claude/specs/voice-loop-walking-skeleton.md`)
-/// — a minimal precursor to the real on-device Kokoro-82M platform channel
-/// (design doc §09), using only the OS's own AVFoundation, no CocoaPods/SPM
-/// third-party dependency required.
-private class SpeechSynthesizerDelegate: NSObject, AVSpeechSynthesizerDelegate {
-  private let channel: FlutterMethodChannel
-
-  init(channel: FlutterMethodChannel) {
-    self.channel = channel
-  }
-
-  func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
-    print("[TTS] didStart")
-  }
-
-  func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-    print("[TTS] didFinish")
-    channel.invokeMethod("onComplete", arguments: nil)
-  }
-
-  func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-    print("[TTS] didCancel")
-    channel.invokeMethod("onComplete", arguments: nil)
   }
 }

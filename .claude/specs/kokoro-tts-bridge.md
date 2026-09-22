@@ -1,6 +1,6 @@
 # Kokoro-82M TTS bridge
 
-**Status:** Draft
+**Status:** Implemented
 
 ## Context
 
@@ -31,12 +31,12 @@ This needs on-device verification (audio quality/behavior can't be judged any ot
 
 ## Acceptance criteria
 
-Manual, on-device only (native audio quality/behavior can't run under `flutter test`) — this feature is almost entirely native audio I/O, so there is little to unit-test; no new Dart-side logic is introduced beyond a thin `MethodChannel` pass-through identical in shape to the existing (already-tested-by-precedent) `NativeSpeechSynthesizerTts`:
+Manual, on-device only (native audio quality/behavior can't run under `flutter test`) — this feature is almost entirely native audio I/O, so there is little to unit-test; no new Dart-side logic is introduced beyond a thin `MethodChannel` pass-through identical in shape to the existing (already-tested-by-precedent) `NativeSpeechSynthesizerTts`. All verified on the physical iPhone 16e (`yuto の iPhone`):
 
-- [ ] The app builds and installs on the physical iPhone with the bundled Kokoro model (confirms the SPM package + Resources folder reference were added correctly).
-- [ ] Speaking to the app produces a reply spoken back in Kokoro's voice (not Apple's default voice) — audibly distinguishable from the walking-skeleton's `AVSpeechSynthesizer` output.
-- [ ] The full voice loop (listen → recognize → echo → Kokoro speaks it → listen again) works end-to-end for several consecutive turns, matching the stability already achieved with the STT bridge (`.claude/specs/dictation-transcriber-stt-bridge.md`) — no audio session conflicts with the persistent STT session.
-- [ ] Playback completion is correctly detected (`onComplete` fires once, at the right time) so the loop resumes listening promptly, not late or never.
+- [x] The app builds and installs on the physical iPhone with the bundled Kokoro model (confirms the SPM package + Resources folder reference were added correctly).
+- [x] Speaking to the app produces a reply spoken back in Kokoro's voice (not Apple's default voice) — audibly distinguishable from the walking-skeleton's `AVSpeechSynthesizer` output. Confirmed directly by the user.
+- [x] The full voice loop (listen → recognize → echo → Kokoro speaks it → listen again) works end-to-end for several consecutive turns, matching the stability already achieved with the STT bridge (`.claude/specs/dictation-transcriber-stt-bridge.md`) — no audio session conflicts with the persistent STT session, no errors in the console log.
+- [x] Playback completion is correctly detected (`onComplete` fires once, at the right time) so the loop resumes listening promptly, not late or never — confirmed via multiple consecutive turns continuing to work without manual intervention.
 
 ## Out of scope
 
@@ -52,4 +52,15 @@ Manual, on-device only (native audio quality/behavior can't run under `flutter t
 
 ## Implementation
 
-<!-- Filled in once Status is Implemented: which source/test files satisfy each acceptance criterion. -->
+Verified on-device (physical iPhone 16e, `yuto の iPhone`): Kokoro's voice audibly replaces Apple's default, the full loop is stable across multiple turns, and the console log showed no errors.
+
+- `lib/adapters/tts/kokoro_tts.dart` — the Dart adapter (`lib/adapters/tts/native_speech_synthesizer_tts.dart` deleted, same channel/method shape carried over).
+- `ios/Runner/KokoroTtsBridge.swift` — loads `KokoroTTSModel` from the bundled `Resources/KokoroModel` folder (offline), synthesizes, and plays back via its own `AVAudioEngine`/`AVAudioPlayerNode` without touching `AVAudioSession` (relies on `DictationTranscriberBridge`'s persistent session).
+- `ios/Runner/AppDelegate.swift` — `voice_loop/tts` handler rewired to `KokoroTtsBridge`, `AVSpeechSynthesizer`/`SpeechSynthesizerDelegate` removed.
+- `ios/Runner/Resources/KokoroModel/` — the ~318MB of weights, copied from `investigation_docs/Resources/KokoroModel`. This directory is gitignored (root `.gitignore`'s bare `KokoroModel` rule, pre-existing from `investigation_docs/`) — see `CLAUDE.md`'s Client section for the fresh-checkout setup note.
+- `ios/Runner.xcodeproj/project.pbxproj` — `soniqo/speech-swift` remote package reference (branch `main`) with `KokoroTTS`/`AudioCommon` product dependencies linked to `Runner`, plus the `KokoroModel` resource folder reference and the new Swift file — all added via the Python `pbxproj` library rather than hand-editing.
+- `IPHONEOS_DEPLOYMENT_TARGET` raised from 15.0 to 18.0 in all three build configs — unplanned, but required: `KokoroTTS`'s compiled module declares a minimum deployment target of iOS 18.0, and the build fails outright below that (this is a hard module-level requirement, unlike `DictationTranscriberBridge`'s `@available(iOS 26.0, *)` guard, which only gates specific API calls while the project itself stays at a low deployment target). Not a concern for this personal-use app (the target device runs iOS 26.6).
+
+Two things worth remembering if this file or the pbxproj tooling is touched again:
+- **The `pbxproj` Python library (v4.3.3) has a bug** in `_filter_targets_without_path`: it assumes every `PBXBuildFile` has a `fileRef`, but Swift Package product build files have `productRef` instead and no `fileRef`, raising `AttributeError` on any `add_file`/`add_folder` call once a project already has an SPM package added. Worked around in this session by monkey-patching that method to skip build files without a `fileRef` before calling `add_file`/`add_folder` — needed again for any future manual pbxproj edit via this library, since the project now permanently has SPM product build files in it.
+- **`pbxproj`'s folder-vs-file detection depends on the process's current working directory** matching the Xcode project directory (it resolves relative paths via `os.path.isdir(os.path.abspath(...))`, which silently misresolves if you run the script from elsewhere) — `os.chdir()` into `ios/` before calling `add_folder`/`add_file`, or the `KokoroModel` folder gets added as a single opaque `text` file instead of a real `folder` reference (which happened once during this implementation and had to be reverted and redone).
