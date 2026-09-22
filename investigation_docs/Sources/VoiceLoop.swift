@@ -151,7 +151,7 @@ final class VoiceLoop {
                 }
             }
             ttsReport = await tts.report()
-            add("Kokoro ロード完了")
+            add("Kokoro ロード完了\n\(ttsReport)")
 
             state = .listening
         } catch {
@@ -304,6 +304,7 @@ final class VoiceLoop {
         do {
             let audio = try await tts.synthesize(reply)
             ttsReport = await tts.report()
+            add("計測更新:\n\(ttsReport)")
             playbackRMSdB = -120
             state = .speaking
             host.play(samples: audio)

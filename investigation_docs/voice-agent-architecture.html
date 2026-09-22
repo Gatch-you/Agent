@@ -412,7 +412,7 @@ footer.doc a{color:var(--text-muted)}
 <div class="wrap">
 
 <header class="doc">
-  <p class="eyebrow">System Architecture · v1.6</p>
+  <p class="eyebrow">System Architecture · v1.7</p>
   <h1>音声英会話エージェント<br>アーキテクチャ設計</h1>
   <p class="lede">iPhone 上で完結する、サーバーレスのハイブリッド構成。オンデバイス処理を最大限使ってランニングコストを抑えつつ、将来の音声エージェント化に向けて拡張点を1箇所に集約する。</p>
   <div class="meta">
@@ -814,9 +814,9 @@ footer.doc a{color:var(--text-muted)}
   <p class="intro">クラウド TTS を OSS の軽量モデルに差し替える検証フェーズ。<strong>目的はコスト削減ではなくレイテンシとオフライン動作</strong>。<code>TtsPort</code> の裏を入れ替えるだけで、アプリ層も <code>CascadeSession</code> も変更しない。</p>
 
   <div class="note key">
-    <span class="label">Status — 2026-09-15</span>
-    <p><strong>試聴テスト（検証ステップ1）合格。Kokoro-82M の採用を方針として確定。</strong> 全10項目のチェックリストを通過し、発音の手本として許容できると判断した。G2P の懸念も MisakiSwift により解消済み。</p>
-    <p style="margin-top:10px">残るは<strong>実機での性能実測（ステップ3）とライブラリ選定</strong>のみ。ここで RTF・メモリ・ウォームアップ時間が想定内であれば、そのまま <code>TtsPort</code> アダプタの実装に進む。</p>
+    <span class="label">Status — 2026-09-22 更新</span>
+    <p><strong>試聴テスト（検証ステップ1）合格。Kokoro-82M の採用を確定。</strong> 全10項目のチェックリストを通過し、発音の手本として許容できると判断した。G2P の懸念も MisakiSwift により解消済み。</p>
+    <p style="margin-top:10px"><strong>実機での性能実測（ステップ3）も完了。</strong> VoiceLoopLab の実会話ループで5回合成を実測し、ウォームアップ込みロード 0.86 s、RTF 平均 0.153（最悪 0.188）、ピークメモリ 687 MB。RTF・ウォームアップは判定基準を満たし、ピークメモリは要注視だが致命的ではない。ライブラリも <code>soniqo/speech-swift</code> の <code>KokoroTTS</code> に確定済み。残るは <code>TtsPort</code> アダプタとしての実装のみ。</p>
   </div>
 
   <div class="tw">
@@ -901,7 +901,7 @@ footer.doc a{color:var(--text-muted)}
   <ol class="steps">
     <li><b><s style="opacity:.5">試聴による採否判定</s> — 合格（2026-09-15）</b><span class="d">Colab ノートブックでボイス選定 → プロソディ耐久テスト（疑問文の上昇調・縮約形・対比強勢・最小対立ペア等）→ 速度変更 → 会話ターン再現 → A/B の10項目を実施し、全項目を通過。<strong>発音の手本として許容できると判断。</strong></span></li>
     <li><b><s style="opacity:.5">G2P 依存の解決方法を確認</s> — 完了</b><span class="d">MisakiSwift（Apache-2.0）により解決済み。espeak-ng は不要で、GPLv3 の制約も発生しない。上記参照。</span></li>
-    <li><b>iPhone 16e 実機で RTF・メモリ・ウォームアップを実測</b><span class="d">公開ベンチに食い違いがあるため必須（Colab の計測値は x86 CPU のもので実機性能を示さない）。ウォームアップ後の定常値と初回レイテンシの両方を計測する。</span></li>
+    <li><b><s style="opacity:.5">iPhone 16e 実機で RTF・メモリ・ウォームアップを実測</s> — 完了（2026-09-22）</b><span class="d">VoiceLoopLab の実会話ループで5回合成を実測: ウォームアップ込みロード <strong>0.86 s</strong>、RTF 平均 <strong>0.153</strong>（最悪 0.188）、ピークメモリ <strong>687 MB</strong>。§04の判定基準（RTF平均&lt;0.2、ウォームアップ&lt;10s）は合格。ピークメモリは合格ライン(600MB)と要検討ライン(900MB)の中間で、致命的ではないが要注視。</span></li>
     <li><b><code>TtsPort</code> アダプタとして実装</b><span class="d">採用が決まってから着手。第1候補は <code>soniqo/speech-swift</code> の <code>KokoroTTS</code>。差し替えのみで完結するはずで、他の層に波及したら設計ミスを疑う。</span></li>
   </ol>
 
@@ -1087,7 +1087,7 @@ footer.doc a{color:var(--text-muted)}
     <tbody>
       <tr><td>LLM プロバイダの最終選定</td><td>実際に音声を聴き比べての品質評価が必要</td><td class="mono">ステップ3 まで</td></tr>
       <tr><td><s style="opacity:.5">TTS のオンデバイス化を採用するか</s><br><strong>→ 採用（2026-09-15 試聴合格）</strong></td><td>チェックリスト10項目を通過。G2P の懸念も解消済み</td><td class="mono">解決済み</td></tr>
-      <tr><td>実機性能が想定内に収まるか</td><td>VoiceLoopLab で会話ループ・barge-in が体感良好に動作することは確認済み（2026-09-21）。RTF・ピークメモリ・初回ウォームアップの具体的な数値はアプリの「計測」表示から別途記録する</td><td class="mono">数値記録待ち</td></tr>
+      <tr><td><s style="opacity:.5">実機性能が想定内に収まるか</s><br><strong>→ 合格（2026-09-22 実測）</strong></td><td>VoiceLoopLab の実会話ループで5回合成を実測: ウォームアップ込みロード 0.86 s、RTF 平均 0.153（最悪 0.188）、ピークメモリ 687 MB。RTF・ウォームアップは判定基準を満たす。ピークメモリは合格(600MB)と要検討(900MB)の中間で要注視</td><td class="mono">解決済み</td></tr>
       <tr><td><s style="opacity:.5">ライブラリ選定</s><br><strong>→ <code>soniqo/speech-swift</code> に確定</strong></td><td>VoiceLoopLab で実機動作を確認済み。<code>mlalma/kokoro-ios</code>（MLX・シミュレータ不可）は不採用</td><td class="mono">解決済み</td></tr>
       <tr><td><s style="opacity:.5">STT の最終選定</s><br><strong>→ <code>DictationTranscriber</code> に確定</strong></td><td><code>SpeechTranscriber</code>は新規ロケールの資産DLが進まず不採用。<code>DictationTranscriber</code>で英語（既存インストール分）の自己診断・マイク認識とも実機確認済み。未インストール言語の新規DLは同じ不具合で通らないことをfr-FRで確認したが、個人利用限定のため実運用上は問題なし。Deepgram（クラウド）は不要（<a href="#p13">§13</a>）</td><td class="mono">解決済み</td></tr>
       <tr><td>状態機械を XState にするか手書き reducer か</td><td>遷移の数と、並行状態（録音中かつ再生中）の必要性次第</td><td class="mono">ステップ4</td></tr>
@@ -1100,7 +1100,7 @@ footer.doc a{color:var(--text-muted)}
 </section>
 
 <footer class="doc">
-  <p>音声英会話エージェント アーキテクチャ設計 v1.6 — フェーズ1（MVP）／フェーズ1.5（TTS ローカル化）／フェーズ2（音声エージェント化）を対象。<br>技術選定は 2026年9月 時点の iOS 26 / Apple Intelligence および OSS TTS の提供状況に基づく。<br><span style="opacity:.75">v1.6 — 本アプリは個人利用限定というスコープを明確化し、STTの最終選定を確定。fr-FR追試で <code>DictationTranscriber</code> も未インストールロケールの新規DLは通らないと判明したが、個人が使う端末には英語アセットが既にあるため実運用上は問題にならないと判断し、<code>DictationTranscriber</code>（オンデバイス・無料）の採用を確定、Deepgramは不要と結論。§01 / §02 / §03 / §04 / §05 / §12 / §13 / §14 を更新。<br>v1.5 — v1.4 の「日本リージョンで英語オンデバイスSTTが不可」という結論を訂正。原因は地域制限ではなく「未インストールロケールの資産DLが進まない」不具合で、<code>DictationTranscriber</code>経由なら英語もオンデバイスで動作することを実機確認（自己診断・マイク入力とも）。未インストール言語の新規DL可否のみ最終確認待ちとし、Deepgramは暫定フォールバックに格下げ。§01 / §02 / §03 / §04 / §05 / §12 / §13 / §14 を更新。<br>v1.4 — VoiceLoopLab の実機検証結果を反映。音声ループ（AEC/barge-in）は動作確認済みに更新。<code>SpeechAnalyzer</code> は日本リージョンで英語ロケールが機能しないことが判明し不採用、Deepgram（クラウド・ストリーミング）に変更。§01 / §02 / §03 / §04 / §05 / §12 / §13 / §14 を更新。<br>v1.3 — 試聴テスト合格により Kokoro-82M の採用を確定。§03 / §04 / §09 / §14 を更新。<br>v1.2 — §09 に G2P 調査結果（MisakiSwift により解決）とライブラリ候補比較を追加、検証手順を4ステップに再編。<br>v1.1 — §09 フェーズ1.5 を新設、§03 / §04 / §12 / §13 / §14 を更新。</span></p>
+  <p>音声英会話エージェント アーキテクチャ設計 v1.7 — フェーズ1（MVP）／フェーズ1.5（TTS ローカル化）／フェーズ2（音声エージェント化）を対象。<br>技術選定は 2026年9月 時点の iOS 26 / Apple Intelligence および OSS TTS の提供状況に基づく。<br><span style="opacity:.75">v1.7 — VoiceLoopLab の実会話ループで Kokoro-82M の実機性能を実測（5回合成平均）: ウォームアップ込みロード 0.86 s、RTF 平均 0.153（最悪 0.188）、ピークメモリ 687 MB。RTF・ウォームアップは判定基準を満たし、フェーズ1.5の残課題（実機実測）を解決済みに更新。§09 / §14 を更新。<br>v1.6 — 本アプリは個人利用限定というスコープを明確化し、STTの最終選定を確定。fr-FR追試で <code>DictationTranscriber</code> も未インストールロケールの新規DLは通らないと判明したが、個人が使う端末には英語アセットが既にあるため実運用上は問題にならないと判断し、<code>DictationTranscriber</code>（オンデバイス・無料）の採用を確定、Deepgramは不要と結論。§01 / §02 / §03 / §04 / §05 / §12 / §13 / §14 を更新。<br>v1.5 — v1.4 の「日本リージョンで英語オンデバイスSTTが不可」という結論を訂正。原因は地域制限ではなく「未インストールロケールの資産DLが進まない」不具合で、<code>DictationTranscriber</code>経由なら英語もオンデバイスで動作することを実機確認（自己診断・マイク入力とも）。未インストール言語の新規DL可否のみ最終確認待ちとし、Deepgramは暫定フォールバックに格下げ。§01 / §02 / §03 / §04 / §05 / §12 / §13 / §14 を更新。<br>v1.4 — VoiceLoopLab の実機検証結果を反映。音声ループ（AEC/barge-in）は動作確認済みに更新。<code>SpeechAnalyzer</code> は日本リージョンで英語ロケールが機能しないことが判明し不採用、Deepgram（クラウド・ストリーミング）に変更。§01 / §02 / §03 / §04 / §05 / §12 / §13 / §14 を更新。<br>v1.3 — 試聴テスト合格により Kokoro-82M の採用を確定。§03 / §04 / §09 / §14 を更新。<br>v1.2 — §09 に G2P 調査結果（MisakiSwift により解決）とライブラリ候補比較を追加、検証手順を4ステップに再編。<br>v1.1 — §09 フェーズ1.5 を新設、§03 / §04 / §12 / §13 / §14 を更新。</span></p>
 </footer>
 
 </main>
