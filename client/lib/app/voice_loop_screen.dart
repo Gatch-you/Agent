@@ -66,8 +66,17 @@ class _VoiceLoopScreenState extends State<VoiceLoopScreen> {
       },
       onFinalResult: (text) async {
         if (!mounted) return;
+        // Guard against acting twice on the same utterance: some STT
+        // adapters can emit more than one final result in quick succession
+        // (e.g. DictationTranscriberStt's silence-timeout synthetic final,
+        // followed by the real one once finalizeAndFinishThroughEndOfInput()
+        // actually completes). Checking only the resulting phase isn't
+        // enough — once already `speaking`, a second final would still see
+        // phase == speaking and re-trigger stopListening()/speak(), which
+        // crashed the native Speech framework by tearing it down twice.
+        final wasListening = _state.phase == VoiceLoopPhase.listening;
         setState(() => _state = _state.reduce(FinalResult(text)));
-        if (_state.phase != VoiceLoopPhase.speaking) return;
+        if (!wasListening || _state.phase != VoiceLoopPhase.speaking) return;
 
         final reply = _state.finalTranscript;
         await widget.stt.stopListening();
