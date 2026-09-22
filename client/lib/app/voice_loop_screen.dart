@@ -90,10 +90,14 @@ class _VoiceLoopScreenState extends State<VoiceLoopScreen> {
       onFinalResult: (text) async {
         if (!mounted) return;
         // Guard against acting twice on the same utterance: some STT
-        // adapters can emit more than one final result in quick succession.
-        // Checking only the resulting phase isn't enough — once already past
-        // `listening`, a second final would still see a non-`listening`
-        // phase and re-trigger this whole turn.
+        // adapters can emit more than one final result in quick succession
+        // (e.g. DictationTranscriberStt's silence-timeout synthetic final,
+        // followed by the real one once finalizeAndFinishThroughEndOfInput()
+        // actually completes). Checking only the resulting phase isn't
+        // enough — once already past `listening`, a second final would still
+        // see a non-`listening` phase and re-trigger this whole turn (this
+        // exact double-trigger crashed the native Speech framework once by
+        // tearing its session down twice — see DictationTranscriberBridge.swift).
         final wasListening = _state.phase == VoiceLoopPhase.listening;
         setState(() => _state = _state.reduce(FinalResult(text)));
         if (!wasListening || _state.phase != VoiceLoopPhase.thinking) return;
