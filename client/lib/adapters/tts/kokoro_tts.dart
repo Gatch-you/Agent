@@ -2,16 +2,17 @@ import 'package:flutter/services.dart';
 
 import '../../ports/tts_port.dart';
 
-/// [TtsPort] backed by a small custom platform channel to `AVSpeechSynthesizer`
-/// (see `ios/Runner/AppDelegate.swift`), instead of the `flutter_tts` plugin.
+/// [TtsPort] backed by the on-device Kokoro-82M model
+/// (`ios/Runner/KokoroTtsBridge.swift`, via `soniqo/speech-swift`'s
+/// `KokoroTTS` package), replacing the walking-skeleton's
+/// `AVSpeechSynthesizer`-based `NativeSpeechSynthesizerTts`.
 ///
-/// `flutter_tts` ships no `Package.swift`, so keeping it would force CocoaPods
-/// back into the build even with Swift Package Manager enabled. This bridge
-/// uses only AVFoundation (part of the OS SDK), so it needs neither CocoaPods
-/// nor SPM — and it previews the shape of the real Kokoro-82M platform
-/// channel planned for design doc §09.
-class NativeSpeechSynthesizerTts implements TtsPort {
-  NativeSpeechSynthesizerTts() {
+/// The channel name and method shape (`speak`/`stop`/`onComplete`) are
+/// unchanged from the walking-skeleton bridge — only what's behind them on
+/// the native side changed — so this class is almost identical to
+/// `NativeSpeechSynthesizerTts`. See `.claude/specs/kokoro-tts-bridge.md`.
+class KokoroTts implements TtsPort {
+  KokoroTts() {
     _channel.setMethodCallHandler(_handleMethodCall);
   }
 
