@@ -2,3 +2,6 @@
 .DS_Store
 
 KokoroModel
+
+# Gemini API key for --dart-define-from-file (client/lib/main.dart) — never committed.
+client/.env.json

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../domain/voice_loop_state.dart';
+import '../ports/llm_port.dart';
 import '../ports/stt_port.dart';
 import '../ports/tts_port.dart';
 import 'theme/voice_loop_tokens.dart';
@@ -11,16 +12,16 @@ import 'widgets/message_bubble.dart';
 import 'widgets/voice_mic_button.dart';
 
 /// The real conversation screen (`.claude/specs/conversation-screen-visual-design.md`),
-/// reproducing `design/conversation.html`. Speaks back whatever it hears (no
-/// LLM yet — see `ReplyReady` in `voice_loop_state.dart`) so both the STT
-/// input and the TTS output are visible: a scrolling chat history, a live
+/// now with a real LLM-generated reply (`.claude/specs/gemini-llm-reply.md`)
+/// in place of the earlier echo — so a scrolling chat history, a live
 /// transcript while listening, and an animated mic button through
-/// idle/listening/thinking/speaking.
+/// idle/listening/thinking/speaking all reflect an actual conversation.
 class VoiceLoopScreen extends StatefulWidget {
-  const VoiceLoopScreen({super.key, required this.stt, required this.tts});
+  const VoiceLoopScreen({super.key, required this.stt, required this.tts, required this.llm});
 
   final SttPort stt;
   final TtsPort tts;
+  final LlmPort llm;
 
   @override
   State<VoiceLoopScreen> createState() => _VoiceLoopScreenState();
@@ -103,15 +104,18 @@ class _VoiceLoopScreenState extends State<VoiceLoopScreen> {
         if (!wasListening || _state.phase != VoiceLoopPhase.thinking) return;
         _scrollToBottom();
 
-        final userText = _state.messages.last.text;
         await widget.stt.stopListening();
 
-        // Stand-in for real LLM latency — there's no CascadeSession/LlmPort
-        // yet (see .claude/specs/conversation-screen-visual-design.md), so
-        // this is just a short fixed beat before echoing the reply back.
-        await Future.delayed(const Duration(milliseconds: 600));
+        String replyText;
+        try {
+          replyText = await widget.llm.reply(_state.messages);
+        } catch (e) {
+          // Keeps the loop from getting stuck in `thinking` forever on a
+          // network/API failure — see .claude/specs/gemini-llm-reply.md.
+          replyText = "Sorry, I'm having trouble responding right now.";
+        }
         if (!mounted) return;
-        setState(() => _state = _state.reduce(ReplyReady(userText)));
+        setState(() => _state = _state.reduce(ReplyReady(replyText)));
         if (_state.phase != VoiceLoopPhase.speaking) return;
         _scrollToBottom();
 
