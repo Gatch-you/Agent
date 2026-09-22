@@ -1,0 +1,66 @@
+/*
+ * Design tokens — iOS-native visual language.
+ *
+ * These map directly onto Flutter when this design is implemented for real:
+ *   --color-*        -> ColorScheme / CupertinoColors entries
+ *   --font-*          -> TextTheme / CupertinoTextThemeData entries
+ *   --space-*         -> a spacing scale constant (e.g. AppSpacing.xs..xl)
+ *   --radius-*        -> BorderRadius constants
+ * Keeping the same names on both sides makes the handoff mechanical instead
+ * of a re-interpretation.
+ */
+
+:root {
+  /* Color — iOS system palette (dark mode). This app defaults to dark: a
+     voice-first, "listening in the dark" feel, with an ambient glow behind
+     the content (see .ambient-glow in conversation.html) standing in for
+     Siri's animated effect. */
+  --color-accent: #0a84ff; /* CupertinoColors.activeBlue (dark) / ColorScheme.primary */
+  --color-accent-pressed: #409cff;
+  --color-danger: #ff453a; /* CupertinoColors.systemRed (dark) — active/stop mic */
+  --color-success: #32d74b; /* CupertinoColors.systemGreen (dark) */
+
+  --color-bg-grouped: #000000; /* CupertinoColors.systemGroupedBackground (dark) */
+  --color-bg-surface: rgba(255, 255, 255, 0.12); /* frosted "material" surface over the glow */
+  --color-bg-bubble-assistant: #2c2c2e; /* CupertinoColors.systemGrey5 (dark) */
+
+  --color-label-primary: rgba(255, 255, 255, 0.95);
+  --color-label-secondary: rgba(235, 235, 245, 0.6);
+  --color-label-tertiary: rgba(235, 235, 245, 0.3);
+  --color-label-on-accent: #ffffff;
+
+  --color-separator: rgba(84, 84, 88, 0.6);
+
+  /* Ambient glow blobs — kept low-opacity/blurred in use so they read as
+     soft light, not shapes. */
+  --color-glow-1: #0a84ff;
+  --color-glow-2: #bf5af2;
+  --color-glow-3: #ff375f;
+
+  /* Typography — the standard iOS system-font web stack */
+  --font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+    "Helvetica Neue", Arial, sans-serif;
+
+  --font-large-title: 700 34px/41px var(--font-family);
+  --font-headline: 600 17px/22px var(--font-family);
+  --font-body: 400 17px/22px var(--font-family);
+  --font-subhead: 400 15px/20px var(--font-family);
+  --font-footnote: 400 13px/18px var(--font-family);
+  --font-caption: 500 12px/16px var(--font-family);
+
+  /* Spacing scale */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+
+  /* Corner radius */
+  --radius-bubble: 18px;
+  --radius-card: 14px;
+  --radius-pill: 999px;
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.25, 0.1, 0.25, 1);
+}
