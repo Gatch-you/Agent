@@ -35,6 +35,10 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # Plain HTTP client for the Gemini REST API (lib/adapters/llm/gemini_llm.dart)
+  # — pure Dart, no native platform code, so no CocoaPods/SPM concerns.
+  http: ^1.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
