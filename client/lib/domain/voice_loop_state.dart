@@ -1,12 +1,41 @@
-/// Pure Dart state machine for the voice loop (idle -> listening -> speaking).
+/// Pure Dart state machine for the voice loop
+/// (idle -> listening -> thinking -> speaking -> listening -> ...).
 ///
 /// No I/O here — STT/TTS adapters feed events in and read [VoiceLoopState]
 /// back out. This mirrors VoiceLoopLab's `VoiceLoop.swift` state guards
 /// (starting twice / stopping when idle are no-ops) so the same shape can be
 /// carried into the real `sessionMachine` once the native bridges land.
+///
+/// `thinking` is a placeholder for future LLM latency (there's no LLM yet —
+/// see `.claude/specs/conversation-screen-visual-design.md`): the caller
+/// dispatches [ReplyReady] itself after a short synthetic delay, still
+/// carrying an echo of the user's own text.
 library;
 
-enum VoiceLoopPhase { idle, listening, speaking }
+enum VoiceLoopPhase { idle, listening, thinking, speaking }
+
+enum MessageRole { user, assistant }
+
+/// A single turn in the visible conversation history. Deliberately not
+/// named `Message` — that name is reserved for the future persisted
+/// `Session`/`Turn`/`Message` domain model (see `CLAUDE.md`); this is
+/// purely this screen's in-memory display state.
+class VoiceLoopMessage {
+  const VoiceLoopMessage({required this.role, required this.text});
+
+  final MessageRole role;
+  final String text;
+
+  @override
+  bool operator ==(Object other) =>
+      other is VoiceLoopMessage && other.role == role && other.text == text;
+
+  @override
+  int get hashCode => Object.hash(role, text);
+
+  @override
+  String toString() => 'VoiceLoopMessage($role, $text)';
+}
 
 sealed class VoiceLoopEvent {
   const VoiceLoopEvent();
@@ -30,6 +59,14 @@ class FinalResult extends VoiceLoopEvent {
   final String text;
 }
 
+/// Dispatched once a reply is ready to be spoken. Until `CascadeSession`/an
+/// `LlmPort` exist, callers dispatch this themselves after a short synthetic
+/// delay, with `text` still just an echo of the user's own final result.
+class ReplyReady extends VoiceLoopEvent {
+  const ReplyReady(this.text);
+  final String text;
+}
+
 class TtsFinished extends VoiceLoopEvent {
   const TtsFinished();
 }
@@ -38,28 +75,30 @@ class VoiceLoopState {
   const VoiceLoopState({
     this.phase = VoiceLoopPhase.idle,
     this.liveTranscript = '',
-    this.finalTranscript = '',
+    this.messages = const [],
   });
 
   final VoiceLoopPhase phase;
   final String liveTranscript;
-  final String finalTranscript;
+  final List<VoiceLoopMessage> messages;
 
   VoiceLoopState copyWith({
     VoiceLoopPhase? phase,
     String? liveTranscript,
-    String? finalTranscript,
+    List<VoiceLoopMessage>? messages,
   }) {
     return VoiceLoopState(
       phase: phase ?? this.phase,
       liveTranscript: liveTranscript ?? this.liveTranscript,
-      finalTranscript: finalTranscript ?? this.finalTranscript,
+      messages: messages ?? this.messages,
     );
   }
 
   VoiceLoopState reduce(VoiceLoopEvent event) {
     if (event is StopRequested) {
-      return const VoiceLoopState();
+      // Message history is deliberately preserved across a stop — only the
+      // in-flight turn (phase, live transcript) resets.
+      return copyWith(phase: VoiceLoopPhase.idle, liveTranscript: '');
     }
 
     switch (phase) {
@@ -76,9 +115,21 @@ class VoiceLoopState {
         if (event is FinalResult) {
           if (event.text.trim().isEmpty) return this;
           return copyWith(
-            phase: VoiceLoopPhase.speaking,
-            finalTranscript: event.text,
+            phase: VoiceLoopPhase.thinking,
             liveTranscript: '',
+            messages: [...messages, VoiceLoopMessage(role: MessageRole.user, text: event.text)],
+          );
+        }
+        return this;
+
+      case VoiceLoopPhase.thinking:
+        if (event is ReplyReady) {
+          return copyWith(
+            phase: VoiceLoopPhase.speaking,
+            messages: [
+              ...messages,
+              VoiceLoopMessage(role: MessageRole.assistant, text: event.text),
+            ],
           );
         }
         return this;

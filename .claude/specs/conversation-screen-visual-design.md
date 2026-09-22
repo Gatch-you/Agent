@@ -1,6 +1,6 @@
 # Conversation screen visual design
 
-**Status:** Draft
+**Status:** Implemented
 
 ## Context
 
@@ -32,19 +32,19 @@ No on-device or simulator verification for this pass (the user is unavailable) �
 
 ## Acceptance criteria
 
-Unit-testable (pure domain, `lib/domain/voice_loop_state.dart`):
+Unit-testable (pure domain, `lib/domain/voice_loop_state.dart`) — all pass (`flutter test`, 11 tests):
 
-- [ ] Given phase `listening`, when `FinalResult("hello")` arrives, then phase becomes `thinking`, `messages` gains one entry `(role: user, text: "hello")`, and `liveTranscript` clears.
-- [ ] Given phase `listening`, when `FinalResult("   ")` (blank) arrives, then phase stays `listening` and `messages` is unchanged.
-- [ ] Given phase `thinking`, when `ReplyReady("hi there")` arrives, then phase becomes `speaking` and `messages` gains one entry `(role: assistant, text: "hi there")`, appended after any existing messages.
-- [ ] Given phase `speaking`, when `TtsFinished` arrives, then phase becomes `listening`.
-- [ ] Given phase `thinking`, when `StartRequested` arrives, then state is unchanged (no-op).
-- [ ] Given a non-empty `messages` list in any phase, when `StopRequested` arrives, then phase becomes `idle`, `liveTranscript` clears, and `messages` is unchanged (preserved).
-- [ ] (Regression) All acceptance criteria from `.claude/specs/voice-loop-walking-skeleton.md` that still apply (idle/listening/speaking transitions, startRequested no-ops) continue to pass under the new phase/message shape.
+- [x] Given phase `listening`, when `FinalResult("hello")` arrives, then phase becomes `thinking`, `messages` gains one entry `(role: user, text: "hello")`, and `liveTranscript` clears.
+- [x] Given phase `listening`, when `FinalResult("   ")` (blank) arrives, then phase stays `listening` and `messages` is unchanged.
+- [x] Given phase `thinking`, when `ReplyReady("hi there")` arrives, then phase becomes `speaking` and `messages` gains one entry `(role: assistant, text: "hi there")`, appended after any existing messages.
+- [x] Given phase `speaking`, when `TtsFinished` arrives, then phase becomes `listening`.
+- [x] Given phase `thinking`, when `StartRequested` arrives, then state is unchanged (no-op).
+- [x] Given a non-empty `messages` list in any phase, when `StopRequested` arrives, then phase becomes `idle`, `liveTranscript` clears, and `messages` is unchanged (preserved).
+- [x] (Regression) All acceptance criteria from `.claude/specs/voice-loop-walking-skeleton.md` that still apply (idle/listening/speaking transitions, startRequested no-ops) continue to pass under the new phase/message shape.
 
-Not unit-tested (visual/animation layer — verified by the user's own visual review, not automated):
+Not unit-tested (visual/animation layer — pending the user's own visual review, not automated):
 
-- The screen's visual match to `design/conversation.html` (colors, spacing, bubble shapes, glow animation, mic ring pulse, equalizer icon).
+- The screen's visual match to `design/conversation.html` (colors, spacing, bubble shapes, glow animation, mic ring pulse, equalizer icon). `flutter analyze` is clean and a `flutter run -d chrome` smoke launch showed no runtime exceptions/layout overflows, but this has **not** been visually compared against the mockup or run on iOS (device/simulator) — the user was unavailable for this pass, see Out of scope.
 
 ## Out of scope
 
@@ -61,4 +61,15 @@ Not unit-tested (visual/animation layer — verified by the user's own visual re
 
 ## Implementation
 
-<!-- Filled in once Status is Implemented: which source/test files satisfy each acceptance criterion. -->
+Verified via `flutter test` (11 domain tests, all green) and `flutter analyze` (clean); a `flutter run -d chrome` launch confirmed no runtime exceptions on first paint. **Not yet verified on iOS (device/simulator) or visually compared against the mockup** — the user was unavailable for this pass and asked for the PR to be opened without that step; please review visually before merging.
+
+- `lib/domain/voice_loop_state.dart` + `test/domain/voice_loop_state_test.dart` — `VoiceLoopPhase.thinking`, `VoiceLoopMessage`/`MessageRole`, `ReplyReady` event, and the updated reducer (all acceptance criteria above).
+- `lib/app/theme/voice_loop_tokens.dart` — `design/tokens.css` ported to Dart constants (`VoiceLoopColors`, `VoiceLoopSpacing`, `VoiceLoopRadius`, `VoiceLoopTextStyles`, `voiceLoopEaseStandard`).
+- `lib/app/widgets/ambient_glow.dart` — the animated background glow blobs.
+- `lib/app/widgets/message_bubble.dart` — `MessageBubble` (chat bubble + entrance animation + play button), `ThinkingBubble` (three-dot indicator).
+- `lib/app/widgets/voice_mic_button.dart` — `VoiceMicButton`, the circular mic/stop button with the pulsing-ring animation.
+- `lib/app/voice_loop_screen.dart` — rewritten: nav bar, message list, live-transcript line, control area, and the `listening → thinking → speaking` flow (with the synthetic thinking delay and message-list wiring).
+
+Known simplifications, both forced by "no `TtsPort`/`SttPort` changes" being out of scope:
+- The `TtsPort` interface has no `stop()`, so replaying an assistant bubble's audio can't truly interrupt another one already playing. The screen ignores taps on a different bubble's play button while one is already marked playing (rather than risking two overlapping/queued native utterances), and tapping the currently-playing bubble again only clears the visual indicator without stopping the underlying audio.
+- `mix-blend-mode: screen` from the CSS isn't reproduced as a true blend mode — on the mockup's near-black background it's visually equivalent to plain alpha compositing, which is what the Flutter glow blobs use.
