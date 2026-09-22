@@ -35,13 +35,6 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
-  # Voice loop walking skeleton (.claude/specs/voice-loop-walking-skeleton.md):
-  # off-the-shelf STT plugin, ahead of the custom DictationTranscriber bridge.
-  # (TTS uses a small custom AVSpeechSynthesizer platform channel instead of
-  # flutter_tts, because flutter_tts ships no Package.swift and would force
-  # CocoaPods back in — see lib/adapters/tts/native_speech_synthesizer_tts.dart.)
-  speech_to_text: ^7.0.0
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
